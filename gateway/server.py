@@ -22,6 +22,13 @@ import zlib
 import base64
 from typing import Dict, Any, Optional
 from urllib.parse import parse_qs, urlparse
+import glob
+
+# Ensure user site-packages are accessible even when running as LocalSystem
+user_site_packages = glob.glob(r"C:\Users\*\AppData\Local\Python\*\Lib\site-packages") + glob.glob(r"C:\Users\*\AppData\Roaming\Python\*\site-packages")
+for p in user_site_packages:
+    if os.path.isdir(p) and p not in sys.path:
+        sys.path.insert(0, p)
 
 from flask import Flask, request, Response, jsonify, stream_with_context
 

@@ -68,6 +68,13 @@ $serviceRunner = "$scriptDir\service_runner.py"
 & "$nssmExe" set $serviceName Start SERVICE_AUTO_START
 & "$nssmExe" set $serviceName AppStdout "$logDir\service.log"
 & "$nssmExe" set $serviceName AppStderr "$logDir\service_error.log"
+& "$nssmExe" set $serviceName AppThrottle 1500
+
+# Ensure LocalSystem inherits user site-packages
+$sitePkgs = (Get-ChildItem -Path "C:\Users\*\AppData\Local\Python\*\Lib\site-packages" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName) -join ";"
+if ($sitePkgs) {
+    & "$nssmExe" set $serviceName AppEnvironmentExtra "PYTHONPATH=$sitePkgs"
+}
 
 # 3. Start the service
 Write-Host "Starting service now..." -ForegroundColor Cyan
