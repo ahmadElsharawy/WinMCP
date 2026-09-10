@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     WinMCP Windows Service Installer (via NSSM)
 .DESCRIPTION
@@ -18,14 +18,14 @@ Set-Location $scriptDir
 # Check Administrator Privileges
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Write-Host "`n[!] تتطلب خدمة الويندوز صلاحيات المسؤول (Administrator). جاري طلب الصلاحيات..." -ForegroundColor Yellow
+    Write-Host "`n[!] Installing as a Windows Service requires Administrator privileges. Elevating..." -ForegroundColor Yellow
     $argsList = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptDir\install_service.ps1`""
     Start-Process powershell.exe -Verb RunAs -ArgumentList $argsList
     exit 0
 }
 
 Write-Host "`n========================================================" -ForegroundColor Cyan
-Write-Host "    تثبيت WinMCP كخدمة نظام ويندوز دائمة (Windows Service)  " -ForegroundColor White
+Write-Host "    Install WinMCP as Native Windows Service (NSSM)     " -ForegroundColor White
 Write-Host "========================================================" -ForegroundColor Cyan
 
 $serviceName = "WinMCP-Service"
@@ -34,7 +34,7 @@ $runnerScript = "$scriptDir\run_winmcp.ps1"
 $logDir = "$scriptDir\logs"
 
 if (-not (Test-Path $nssmExe)) {
-    Write-Host "تنزيل أداة nssm.exe..." -ForegroundColor Yellow
+    Write-Host "Downloading nssm.exe helper..." -ForegroundColor Yellow
     $nssmZip = "$scriptDir\bin\nssm.zip"
     curl.exe -L -o $nssmZip "https://nssm.cc/release/nssm-2.24.zip"
     if (Test-Path $nssmZip) {
@@ -49,14 +49,14 @@ if (!(Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | 
 # 1. Stop existing service if running
 $existing = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 if ($existing) {
-    Write-Host "إيقاف الخدمة الحالية..." -ForegroundColor Yellow
+    Write-Host "Stopping and removing existing service..." -ForegroundColor Yellow
     & "$nssmExe" stop $serviceName 2>$null
     & "$nssmExe" remove $serviceName confirm 2>$null
     Start-Sleep -Seconds 2
 }
 
 # 2. Install Service via NSSM
-Write-Host "تسجيل الخدمة في نظام Windows Services..." -ForegroundColor Cyan
+Write-Host "Registering service in Windows Services manager..." -ForegroundColor Cyan
 $psExe = (Get-Command "powershell.exe").Source
 
 & "$nssmExe" install $serviceName "$psExe" "-NoProfile -ExecutionPolicy Bypass -File `"$runnerScript`""
@@ -68,20 +68,20 @@ $psExe = (Get-Command "powershell.exe").Source
 & "$nssmExe" set $serviceName AppStderr "$logDir\service_error.log"
 
 # 3. Start the service
-Write-Host "بدء تشغيل الخدمة الآن..." -ForegroundColor Cyan
+Write-Host "Starting service now..." -ForegroundColor Cyan
 & "$nssmExe" start $serviceName
 
 Start-Sleep -Seconds 3
 $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 
 if ($svc -and $svc.Status -eq "Running") {
-    Write-Host "`n[✔] تم تثبيت وتشغيل خدمة WinMCP بنجاح فائق!" -ForegroundColor Green
-    Write-Host "  - اسم الخدمة: $serviceName" -ForegroundColor White
-    Write-Host "  - نوع البدء: تلقائي مع إقلاع الجهاز (SERVICE_AUTO_START)" -ForegroundColor White
-    Write-Host "  - تعمل دائماً في الخلفية وتستمر حتى بعد الريستارت." -ForegroundColor White
+    Write-Host "`n[OK] WinMCP Windows Service installed and running successfully!" -ForegroundColor Green
+    Write-Host "  - Service Name : $serviceName" -ForegroundColor White
+    Write-Host "  - Startup Type : Automatic on boot (SERVICE_AUTO_START)" -ForegroundColor White
+    Write-Host "  - Runs 24/7 in the background and survives system reboots." -ForegroundColor White
 } else {
-    Write-Host "`n[!] تم تسجيل الخدمة وحالتها الحالية: $($svc.Status)" -ForegroundColor Yellow
-    Write-Host "تفقد السجلات في: $logDir\service_error.log" -ForegroundColor DarkGray
+    Write-Host "`n[!] Service registered. Current status: $($svc.Status)" -ForegroundColor Yellow
+    Write-Host "Check logs at: $logDir\service_error.log" -ForegroundColor DarkGray
 }
 
 Write-Host "========================================================`n" -ForegroundColor Cyan

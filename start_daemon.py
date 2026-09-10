@@ -2,6 +2,7 @@ import subprocess
 import os
 import sys
 import time
+import re
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 gateway_py = os.path.join(script_dir, "gateway", "server.py")
@@ -37,14 +38,14 @@ gw_out = open(os.path.join(log_dir, "gateway.log"), "a", encoding="utf-8")
 gw_err = open(os.path.join(log_dir, "gateway_error.log"), "a", encoding="utf-8")
 p_gw = subprocess.Popen([pythonw_exe, "-u", gateway_py], stdout=gw_out, stderr=gw_err, creationflags=flags)
 
-# 2. Start cloudflared detached
+# 2. Start cloudflared detached with fresh log (mode "w" to clear old URLs)
 if os.path.exists(cf_exe):
-    cf_out = open(os.path.join(log_dir, "cloudflared.log"), "a", encoding="utf-8")
-    cf_err = open(os.path.join(log_dir, "cloudflared_error.log"), "a", encoding="utf-8")
+    cf_out = open(os.path.join(log_dir, "cloudflared.log"), "w", encoding="utf-8")
+    cf_err = open(os.path.join(log_dir, "cloudflared_error.log"), "w", encoding="utf-8")
     if tunnel_mode == "Custom" and tunnel_token:
         args = [cf_exe, "tunnel", "run", "--token", tunnel_token]
     else:
-        args = [cf_exe, "tunnel", "--url", "http://127.0.0.1:8765"]
+        args = [cf_exe, "tunnel", "--url", "http://127.0.0.1:8765", "--protocol", "http2"]
     p_cf = subprocess.Popen(args, stdout=cf_out, stderr=cf_err, creationflags=flags)
     print(f"Detached Gateway PID: {p_gw.pid}, Cloudflared PID: {p_cf.pid}")
 else:

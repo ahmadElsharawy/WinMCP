@@ -1,238 +1,203 @@
 # 🚀 Windows MCP Server & Remote AI Desktop Controller
 
-دليل التثبيت الشامل والتشغيل التلقائي لخادم **Windows MCP Server** الذي يحول جهازك إلى خادم ذكاء اصطناعي تفاعلي متكامل للتحكم بسطح المكتب وكافة برامج الويندوز (**Excel, Word, Outlook, Telegram, المتصفحات، الملفات، PowerShell، الخدمات، وإدارة النظام بالكامل**) عن بُعد عبر **Claude** و **ChatGPT** دون الحاجة لفتح أي منفذ (Port) في الراوتر.
+A complete, turnkey solution that turns any Windows PC or laptop into a secure, remotely accessible AI desktop automation server. Control your entire Windows environment (**Excel, Word, Outlook, Telegram, Web Browsers, Filesystem, PowerShell, Services, and System Administration**) remotely via **Claude** and **ChatGPT** without port forwarding, dynamic DNS headaches, or router configuration.
 
-المشروع مبني اعتماداً على المحرك الرسمي مفتوح المصدر:
+Powered by the official open-source core engine:
 [deploymenttheory/windows-mcp-server](https://github.com/deploymenttheory/windows-mcp-server)
 
 ---
 
-## 📦 مشروع محمول بالكامل (100% Portable)
-تمت برمجة هذا المشروع بالكامل ليكون مستقلاً ومحمولاً (`Self-Contained & Path-Independent`):
-- يمكن لأي شخص أخذ نسخة من المجلد أو تحميله على أي جهاز كمبيوتر أو لابتوب يعمل بنظام Windows.
-- لا توجد أي مسارات ثابتة (Hardcoded Paths) — يتعرف النظام تلقائياً على موقعه أينما وُضع.
-- يعمل على الفور بمجرد النقر المزدوج على ملف **`install.bat`** أو تشغيل **`install.ps1`**.
+## 📦 100% Portable & Self-Contained
+
+This project is engineered to be fully portable and path-independent:
+- **Zero Hardcoded Paths**: Automatically detects its current workspace location dynamically on any Windows machine or drive letter.
+- **Copy & Run Anywhere**: Clone or move the folder to any machine or USB drive, and run `install.bat` or `winmcp`.
+- **Turnkey Setup**: Works out of the box with a single double-click or PowerShell one-liner.
 
 ---
 
-## ⚡ 1. التثبيت السريع (Turnkey One-Liner / Double-Click)
+## ⚡ 1. Quick Installation (Turnkey One-Liner / Double-Click)
 
-### الطريقة الأولى (الأسلم والأسهل):
-1. قم بتحميل أو استنساخ المشروع:
+### Method 1 (Easiest - Double-Click):
+1. Clone or download the repository:
    ```bash
    git clone https://github.com/ahmadElsharawy/WinMCP.git
    cd WinMCP
    ```
-2. انقر نقراً مزدوجاً فوق ملف **`install.bat`**.
+2. Double-click **`install.bat`**.
 
-### الطريقة الثانية (عبر PowerShell):
-افتح نافذة **PowerShell** داخل مجلد المشروع، ونفذ:
+### Method 2 (PowerShell):
+Open a **PowerShell** prompt inside the project folder and run:
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force; .\install.ps1
 ```
 
-### ماذا يفعل التثبيت التلقائي؟
-1. **يكتشف المسار تلقائياً**: يحدد مجلد المشروع ومسارات البرامج دون أي تدخل منك.
-2. **يجهز نفق Cloudflare Tunnel**: يتيح لك الاختيار بين نفق فوري مجاني (Quick Tunnel) أو نطاقك الخاص (Custom Domain).
-3. **يتحقق من بيئة العمل**: يفحص وجود Python ويثبت المكتبات الخفيفة اللازمة (`flask`, `requests`).
-4. **ينزل المحركات الرسمية**: يوفر أحدث باينري لـ `windows-mcp-server.exe` و `cloudflared.exe` و `nssm.exe`.
-5. **يولد مفتاح أمان مشفر**: ينشئ مفتاح أمان عشوائي فائق التشفير (256-bit Bearer Token) في ملف محمي `.env`.
-6. **يفعل التشغيل التلقائي المزدوج في الخلفية (Background Services)**:
-   - يبرمج مهمة في مجدول مهام ويندوز (**Windows Task Scheduler**) باسم `WindowsMCPServer`.
-   - ينشئ مشغلاً صامتاً (`WinMCP_AutoStart.vbs`) في مجلد بدء التشغيل (**Startup Folder**).
-   - يضمن استمرار الخادم دائماً وتشغيله التلقائي عند تشغيل الكمبيوتر وبعد كل ريستارت.
-7. **يضيف أداة الإدارة `winmcp` إلى الـ PATH**: لتتمكن من كتابة `winmcp` من أي مكان في النظام.
-8. **يشغل الخادم فوراً**: ويطبع لك الروابط الجاهزة للنسخ إلى Claude و ChatGPT مع مفتاح الأمان.
+### What does the automated installer do?
+1. **Auto-Detects Paths**: Resolves all relative folders, Python executables, and binaries automatically.
+2. **Cloudflare Tunnel Setup**: Prompts you to select between a free instant **Quick Tunnel** (`*.trycloudflare.com`) or a permanent **Custom Domain** (Cloudflare Zero Trust Tunnel).
+3. **Environment & Dependencies**: Validates Python and installs required lightweight modules (`flask`, `requests`).
+4. **Binary Provisioning**: Downloads or provisions verified releases for `windows-mcp-server.exe`, `cloudflared.exe`, and `nssm.exe`.
+5. **Generates Cryptographic Security Token**: Creates a high-entropy 256-bit Bearer token stored in a protected `.env` file.
+6. **Configures Dual Background Persistence**:
+   - Registers a Windows Scheduled Task (`WindowsMCPServer`).
+   - Generates a silent background launcher (`WinMCP_AutoStart.vbs`) in your Windows Startup folder (`shell:startup`).
+   - Ensures WinMCP survives system reboots and stays continuously available.
+7. **Registers Global CLI (`winmcp`)**: Adds the project folder to the User `PATH` environment variable so you can run `winmcp` from any terminal.
+8. **Starts the Server & Displays Endpoints**: Outputs your ready-to-copy endpoints for Claude and ChatGPT along with authentication credentials.
 
 ---
 
-## 🔄 2. خيارات التشغيل في الخلفية وخدمات الويندوز (Background Services & Reboot Survival)
+## 🔄 2. Background Execution & Persistence Modes
 
-يوفر المشروع نظامين متكاملين للتشغيل في الخلفية لضمان ملاءمته لكافة الاستخدامات:
+WinMCP supports two execution modes designed for different deployment scenarios:
 
-### الوضع الأول: التشغيل التفاعلي الذاتي (Interactive Desktop Service - مفعل افتراضياً)
-- **كيف يعمل**: يتم تشغيله تلقائياً مع بدء تشغيل الويندوز/تسجيل الدخول في الخلفية وبشكل صامت تام.
-- **الميزة الحصرية**: يمتلك وصولاً كاملاً إلى جلسة المستخدم الحقيقية (User Desktop Session)، مما يتيح للذكاء الاصطناعي:
-  - فتح والتعامل المباشر مع برامج سطح المكتب: **Excel, Word, Outlook, Telegram, Chrome, Edge**.
-  - رؤية شجرة عناصر الواجهة التفاعلية (`Snapshot`).
-  - أخذ لقطات حقيقية لسطح المكتب (`Screenshot`).
-  - محاكاة النقر والكتابة بالأزرار والماوس دون أي عزل أمني (No Session 0 Isolation).
-- **التحكم**:
+### Mode 1: Interactive Desktop Session (Default & Recommended)
+- **How it works**: Launches silently upon user login in the active Windows interactive user session.
+- **Key Capability**: Full access to the active user desktop (Session 1+). AI models can:
+  - Automate native desktop applications: **Excel, Word, Outlook, Telegram, Chrome, Edge**.
+  - Capture live UI hierarchy element trees (`Snapshot`).
+  - Take desktop screenshots (`Screenshot`).
+  - Perform mouse clicks, keyboard input, and window manipulation without Session 0 security isolation.
+- **Controls**:
   ```powershell
-  winmcp autostart enable   # تفعيل التشغيل التلقائي مع الويندوز
-  winmcp autostart disable  # إلغاء التشغيل التلقائي
+  winmcp autostart enable   # Enable automatic start on user logon
+  winmcp autostart disable  # Disable automatic start on user logon
   ```
 
-### الوضع الثاني: خدمة ويندوز الدائمة (Native Windows Service عبر NSSM)
-- **كيف يعمل**: يسجل الخادم كخدمة نظام حقيقية باسم `WinMCP-Service` داخل مدير خدمات الويندوز (`services.msc`).
-- **الميزة الحصرية**: يقلع مع إقلاع نظام التشغيل وقبل تسجيل دخول أي مستخدم (مناسب للسيرفرات والأجهزة السحابية التي تعمل دون شاشة/Headless).
-- **التحكم**:
+### Mode 2: Native Windows Service (via NSSM)
+- **How it works**: Installs WinMCP as a native Windows service named `WinMCP-Service` in the Windows Service Control Manager (`services.msc`).
+- **Key Capability**: Boots at system startup before any user logs in. Ideal for headless servers, dedicated virtual machines, or Cloud VPS environments.
+- **Controls**:
   ```powershell
-  winmcp service install    # تثبيت وتشغيل كخدمة ويندوز دائمة (يطلب صلاحية Admin تلقائياً)
-  winmcp service start      # بدء تشغيل الخدمة
-  winmcp service stop       # إيقاف الخدمة
-  winmcp service uninstall  # حذف الخدمة من النظام
+  winmcp service install    # Register and start as a 24/7 background Windows Service
+  winmcp service start      # Start the Windows service
+  winmcp service stop       # Stop the Windows service
+  winmcp service uninstall  # Remove the Windows service from system
   ```
 
 ---
 
-## 🌐 3. خيارات نفق Cloudflare Tunnel (بدون Port Forwarding)
+## 🌐 3. Cloudflare Tunnel Connectivity (Zero Port Forwarding)
 
-يعمل المشروع خلف أي راوتر منزلي أو شبكة شركات دون الحاجة لفتح بورتات إطلاقاً:
+WinMCP provides secure, inbound HTTPS connectivity through Cloudflare Edge without opening firewall ports:
 
-### الخيار (1): Quick Tunnel (مجاني وفوري - بدون دومين وبدون حساب) [موصى به]
-- **كيف يعمل**: ينشئ نفقاً مؤقتاً مشفراً على نطاق `*.trycloudflare.com`.
-- **المميزات**: يعمل فوراً بضغطة زر دون أي متطلبات، ويعطيك رابط HTTPS آمن ومحمي بالمفتاح السري.
-- **ملاحظة**: يمكنك معرفة الرابط النشط في أي وقت بكتابة:
+### Option 1: Quick Tunnel (Free & Instant - No Domain Required)
+- Generates an ephemeral encrypted tunnel on `*.trycloudflare.com`.
+- Zero configuration required.
+- Check current tunnel URL anytime with:
   ```powershell
   winmcp status
   ```
 
-### الخيار (2): Custom Domain Tunnel (نطاقك الخاص الدائم)
-إذا كنت تمتلك دومين وتريد رابطاً ثابتاً لا يتغير أبداً (مثل `https://mcp.yourdomain.com`):
-1. في لوحة [Cloudflare Zero Trust](https://one.dash.cloudflare.com) -> Networks -> Tunnels:
-   - أنشئ نفقاً جديداً وانسخ الـ **Tunnel Token** (يبدأ بـ `eyJh...`).
-   - اربط الـ Public Hostname مع: Service Type = `HTTP`, URL = `localhost:8765`.
-2. أدخل الـ Token واسم الدومين عند تشغيل سكريبت التثبيت وسيقوم بضبطه دائماً.
-
----
-
-## 🛠️ 4. لوحة وأداة الإدارة السريعة (`winmcp`)
-
-تم تجهيز أداة CLI متطورة تتيح لك إدارة السيرفر من أي موجه أوامر في أي مسار:
-
-```powershell
-# عرض لوحة الحالة الشاملة والرابط الخارجي النشط وحالة الخدمات
-winmcp status
-
-# تشغيل الخادم والنفق السحابي يدوياً
-winmcp start
-
-# إيقاف الخادم والنفق بالكامل
-winmcp stop
-
-# إعادة تشغيل السيرفر وتحديث النفق
-winmcp restart
-
-# تثبيت الخادم كخدمة ويندوز نظامية 24/7
-winmcp service install
-
-# إزالة خدمة الويندوز
-winmcp service uninstall
-
-# تفعيل / إلغاء التشغيل التلقائي مع تسجيل الدخول
-winmcp autostart enable
-winmcp autostart disable
-
-# متابعة أوامر الـ AI وسجلات التدقيق لحظياً (Live Logs)
-winmcp logs
-
-# عرض مفتاح الأمان (Bearer Token) لنسخه
-winmcp token
-
-# توليد مفتاح أمان عشوائي جديد فائق التشفير (256-bit Random)
-winmcp token new
-
-# تعيين مفتاح أمان مخصص من كتابتك واختيارك (Custom Token)
-winmcp token set <your_custom_key>
-
-# فتح معالج تغيير مفتاح الأمان التفاعلي
-winmcp token change
-
-# حذف وإلغاء تثبيت المشروع من كامل جذوره وتصفير النظام
-winmcp uninstall
-
-# أو ببساطة: انقر نقراً مزدوجاً على ملف change_token.bat أو uninstall.bat من سطح المكتب!
-
-# عرض رسالة المساعدة وجميع الخيارات
-winmcp help
-```
-
----
-
-## 🔑 4.1 إدارة وتغيير مفتاح الأمان (Token Management)
-
-يمكنك تغيير مفتاح الأمان (Bearer Token) في أي وقت وبمنتهى السهولة بطريقتين:
-
-1. **توليد مفتاح عشوائي مشفر تلقائياً (Random 256-bit Token)**:
-   - عبر موجه الأوامر:
-     ```powershell
-     winmcp token new
-     ```
-   - ينشئ مفتاحاً عشوائياً قوياً من 64 خانة بنظام التشفير الآمن ويعيد تشغيل السيرفر فوراً.
-
-2. **تعيين مفتاح أمان مخصص من كتابتك (Custom Token)**:
-   - عبر موجه الأوامر:
-     ```powershell
-     winmcp token set MySecretPassword123
-     ```
-   - أو تشغيل المعالج التفاعلي:
-     ```powershell
-     winmcp token change
-     ```
-   - أو بالنقر المزدوج على ملف **`change_token.bat`** واختيار `[2]` لكتابة المفتاح المخصص الذي تفضله.
-
-> **ملاحظة**: يقوم السيرفر بحفظ المفتاح الجديد في ملف الإعدادات `.env` وتحديث الجلسة وإعادة تشغيل الخادم تلقائياً دون أي تدخل يدوي!
-
----
-
-## 🗑️ 4.2 إلغاء التثبيت وحذف المشروع من كامل جذوره (Complete Root Uninstaller)
-
-إذا أردت تصفير النظام أو حذف المشروع وإلغاء تثبيته بالكامل لإعادة التجربة من الصفر:
-
-### 1. الطريقة السريعة (نقر مزدوج):
-انقر نقراً مزدوجاً فوق ملف:
-👉 **`uninstall.bat`**
-
-### 2. عبر موجه الأوامر:
-```powershell
-winmcp uninstall
-# أو
-.\uninstall.ps1
-```
-
-### ماذا يفعل معالج الحذف من الجذور؟
-1. **يقفل وينهي كافة العمليات الجارية**: (`windows-mcp-server`, `cloudflared`, `python/gateway`).
-2. **يحذف خدمة الويندوز الرسمية**: يزيل خدمة `WinMCP-Service` تماماً من `services.msc`.
-3. **يحذف مهمة التشغيل التلقائي**: يلغي مهمة `WindowsMCPServer` من مجدول مهام ويندوز (Task Scheduler).
-4. **يحذف المشغل الصامت من مجلد بدء التشغيل**: يمسح ملف `WinMCP_AutoStart.vbs` من `shell:startup`.
-5. **ينظف متغيرات النظام (User PATH)**: يزيل مسار المشروع من بيئة المستخدم كي لا يترك أي أثر.
-6. **يمسح ملفات الإعداد والسجلات المؤقتة**: يحذف ملف `.env` وجميع ملفات `logs` والكاش.
-
-### خيارات الحذف المتاحة:
-- **[1] Reset & Clean (موصى به لإعادة التجربة):** ينظف كافة الخدمات والارتباطات ويصفر ملف الإعدادات، ويترك لك ملفات السورس كود جاهزة لتعيد تشغيل `install.bat` وتبدأ من الصفر بنقاء تام.
-- **[2] Full Purge (حذف نهائي شامل):** ينفذ كافة الخطوات السابقة، ويقوم بمسح مجلد المشروع بالكامل من القرص الصلب.
-
----
-
-## 🤖 5. خطوات الربط مع نماذج الذكاء الاصطناعي
-
-### 1. الربط مع ChatGPT (Custom GPTs / Actions)
-1. ادخل إلى **ChatGPT** -> Explore GPTs -> Create -> Configure -> Actions -> Create new action.
-2. في حقل الـ **Endpoint / Servers**:
+### Option 2: Custom Domain Tunnel (Permanent & Fixed)
+For a permanent, fixed URL (e.g., `https://winmcp.yourdomain.com`):
+1. In the [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com) -> Networks -> Tunnels:
+   - Create a tunnel and copy your **Tunnel Token** (starts with `eyJh...`).
+   - Add a Public Hostname: Service Type = `HTTP`, URL = `localhost:8765`.
+2. Configure your domain anytime via CLI:
+   ```powershell
+   winmcp domain
    ```
-   https://<YOUR_TUNNEL_URL>/mcp
-   ```
-3. في حقل الـ **Authentication**:
-   - اختر **Bearer Token**.
-   - الصق التوكن الخاص بك (الموجود في أمر `winmcp token`).
-4. سيتعرف ChatGPT فوراً على الـ 37 أداة ويصبح قادراً على تشغيل البرامج وأتمتة المهام.
+   WinMCP automatically verifies your domain connectivity against Cloudflare DNS and saves the tunnel configuration.
 
 ---
 
-### 2. الربط مع Claude Web (`claude.ai` Custom Connectors)
-1. ادخل إلى حسابك في **claude.ai** -> **Settings** -> **Integrations** (أو **Connectors**).
-2. اختر **Add Custom MCP Connector**.
-3. الصق الرابط الكامل مع التوكن المدمج:
+## 🛠️ 4. The `winmcp` Management CLI
+
+Manage your entire server lifecycle from any terminal window anywhere on your system:
+
+| Command | Description |
+| :--- | :--- |
+| `winmcp status` | Display the comprehensive status dashboard, active tunnel URL, and running processes |
+| `winmcp start` | Start the Windows MCP Server, Gateway, and Cloudflare Tunnel |
+| `winmcp stop` | Gracefully terminate all WinMCP processes |
+| `winmcp restart` | Restart server components and refresh tunnel connections |
+| `winmcp domain` | Launch the interactive domain configuration wizard (Quick Tunnel vs. Custom Domain) |
+| `winmcp token` | Display your current Bearer authentication token |
+| `winmcp token new` | Generate a new high-entropy 256-bit random Bearer token and reload server |
+| `winmcp token set <key>` | Set a custom Bearer token of your choice and reload server |
+| `winmcp token change` | Interactive token management wizard |
+| `winmcp service install` | Install WinMCP as a permanent 24/7 Windows Service |
+| `winmcp service uninstall` | Remove the Windows Service registration |
+| `winmcp autostart enable` | Enable silent automatic startup on user login |
+| `winmcp autostart disable`| Remove silent startup shortcut and task |
+| `winmcp logs` | Stream live audit and operation logs in real time |
+| `winmcp uninstall` | Launch the root uninstaller wizard (Reset clean or Full purge) |
+| `winmcp help` | Show the CLI command reference |
+
+---
+
+## 🔑 5. Token Management
+
+Easily rotate or customize your Bearer authentication token at any time:
+
+1. **Generate a Random 256-bit Token**:
+   ```powershell
+   winmcp token new
+   ```
+2. **Assign a Custom Token**:
+   ```powershell
+   winmcp token set YourCustomSecretKey123
+   ```
+3. **Interactive Menu / Double-Click**:
+   - Run `winmcp token change` or double-click **`change_token.bat`**.
+
+All token updates immediately persist to `.env` and automatically restart the running gateway session.
+
+---
+
+## 🗑️ 6. Complete Root Uninstaller
+
+If you wish to reset your system or completely remove WinMCP:
+
+- **Quick Double-Click**: Run **`uninstall.bat`**.
+- **Via CLI**:
+  ```powershell
+  winmcp uninstall
+  ```
+
+### What does the Root Uninstaller do?
+1. **Terminates Running Processes**: Kills all associated processes (`windows-mcp-server`, `cloudflared`, `python/gateway`).
+2. **Removes Windows Service**: Unregisters `WinMCP-Service` from `services.msc`.
+3. **Deletes Scheduled Tasks**: Removes the `WindowsMCPServer` logon task.
+4. **Removes Startup Launcher**: Cleans `WinMCP_AutoStart.vbs` from `shell:startup`.
+5. **Cleans Environment PATH**: Removes the WinMCP directory from User `PATH`.
+6. **Cleans Cache & Configurations**: Resets `.env`, logs, and temporary state.
+
+### Uninstallation Options:
+- **[1] Reset & Clean (Recommended for fresh testing)**: Cleans all background registrations, services, and tokens while preserving source code so you can run `install.bat` again cleanly.
+- **[2] Full Purge**: Performs all cleaning steps above and deletes the entire WinMCP folder from disk.
+
+---
+
+## 🤖 7. Connecting AI Clients
+
+### 1. Claude Web (`claude.ai` Custom Connectors)
+1. Go to **claude.ai** -> **Settings** -> **Integrations** (or **Connectors**).
+2. Click **Add Custom MCP Connector**.
+3. Enter your full SSE endpoint with the embedded token parameter:
    ```
    https://<YOUR_TUNNEL_URL>/sse?token=<YOUR_TOKEN>
    ```
-4. سيتصل Claude بالسيرفر عبر **Server-Sent Events (SSE)** ويحصل على قائمة الأدوات الـ 37 تلقائياً.
+4. Claude establishes a live Server-Sent Events (SSE) stream and retrieves the available Windows tools automatically.
 
 ---
 
-### 3. الربط مع Claude Desktop (محلياً على نفس الجهاز)
-في ملف `%APPDATA%\Claude\claude_desktop_config.json`:
+### 2. ChatGPT (Custom GPTs / Actions)
+1. Go to **ChatGPT** -> **Explore GPTs** -> **Create** -> **Configure** -> **Actions** -> **Create new action**.
+2. In the **Servers / URL** field:
+   ```
+   https://<YOUR_TUNNEL_URL>/mcp
+   ```
+3. Under **Authentication**:
+   - Choose **Bearer**.
+   - Paste your token (retrieved via `winmcp token`).
+4. ChatGPT will discover all 37 desktop control tools.
+
+---
+
+### 3. Claude Desktop (Local stdio Connection)
+Add the following to `%APPDATA%\Claude\claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
@@ -243,15 +208,21 @@ winmcp uninstall
   }
 }
 ```
-*(استبدل `C:\\path\\to\\WinMCP` بالمسار الفعلي لمجلد المشروع لديك).*
+*(Replace `C:\\path\\to\\WinMCP` with the actual path to your WinMCP folder).*
 
 ---
 
-## 🔒 6. مصفوفة الأمان وسجل التدقيق (Security & Audit)
+## 🔒 8. Security & Audit Logging
 
-- **الحماية القصوى**: لا يمكن لأي جهة في العالم تنفيذ أي أمر دون مفتاح الـ 256-bit Bearer Token. الطلبات غير المصرح بها ترفض فوراً بكود `401 Unauthorized`.
-- **تصنيف الأدوات**:
-  - **READ ONLY**: استعلامات النظام، قائمة العمليات، الشاشات، لقطات الشاشة، وشجرة عناصر الواجهة.
-  - **LOW RISK**: تشغيل التطبيقات، النقر، الكتابة، التنقل، والضغط على الأزرار.
-  - **HIGH RISK**: أوامر PowerShell، تعديل الملفات، الريجستري، إنهاء العمليات، وإدارة الخدمات.
-- **سجل تدقيق شامل**: كل عملية تسجل لحظياً في `logs/gateway-audit.log` مع حجب كلمات المرور والبيانات الحساسة تلقائياً (`***MASKED***`).
+- **Strict Bearer Authentication**: Requests missing or supplying an incorrect token are rejected immediately with `401 Unauthorized`.
+- **Tool Risk Classification**:
+  - **READ ONLY**: System inspection, process list, monitors, screenshots, and accessibility element trees.
+  - **LOW RISK**: Application launch, mouse clicks, text typing, navigation, and keypresses.
+  - **HIGH RISK**: PowerShell command execution, file modification, registry edits, process termination, and service controls.
+- **Audit Logging**: All tool invocations and system actions are logged in real time to `logs/gateway-audit.log`, with passwords and sensitive fields automatically masked (`***MASKED***`).
+
+---
+
+## 📄 License
+
+This repository is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.

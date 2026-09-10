@@ -1,4 +1,4 @@
-﻿# WinMCP Status Checker Script
+ # WinMCP Status Checker Script
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 Write-Output "=================================================="

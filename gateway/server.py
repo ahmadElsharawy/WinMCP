@@ -118,7 +118,37 @@ class WindowsMCPBackend:
         self.proc: Optional[subprocess.Popen] = None
         self.lock = threading.Lock()
         self.req_id = 1000
+        self.keep_alive_started = False
         self.start_process()
+        self._ensure_keep_alive()
+
+    def _ensure_keep_alive(self):
+        if not self.keep_alive_started:
+            self.keep_alive_started = True
+            t = threading.Thread(target=self._keep_alive_loop, daemon=True)
+            t.start()
+
+    def _keep_alive_loop(self):
+        while True:
+            time.sleep(30)
+            try:
+                with self.lock:
+                    if not self.proc or self.proc.poll() is not None:
+                        sys.stderr.write("Keepalive: backend is down, reviving...\n")
+                        self.start_process()
+                    else:
+                        ping = {"jsonrpc": "2.0", "id": 99999, "method": "ping"}
+                        self.proc.stdin.write(json.dumps(ping) + "\n")
+                        self.proc.stdin.flush()
+                        _ = self.proc.stdout.readline()
+            except Exception as e:
+                sys.stderr.write(f"Keepalive ping error: {e}\n")
+
+    def is_alive(self) -> bool:
+        with self.lock:
+            if not self.proc or self.proc.poll() is not None:
+                self.start_process()
+            return self.proc is not None and self.proc.poll() is None
 
     def start_process(self):
         with self.lock:
@@ -134,7 +164,7 @@ class WindowsMCPBackend:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                bufsize=0
+                bufsize=1
             )
             # Drain stderr asynchronously to avoid buffer blocking
             t = threading.Thread(target=self._drain_stderr, daemon=True)
@@ -281,13 +311,13 @@ def index():
 
 @app.route("/health", methods=["GET"])
 def health():
-    is_alive = BACKEND.proc and BACKEND.proc.poll() is None
+    alive = BACKEND.is_alive()
     return jsonify({
-        "status": "ok" if is_alive else "degraded",
-        "backend_alive": is_alive,
+        "status": "ok" if alive else "degraded",
+        "backend_alive": alive,
         "active_sessions": len(SESSIONS.sessions),
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
-    }), (200 if is_alive else 503)
+    }), (200 if alive else 503)
 
 @app.route("/mcp", methods=["POST"])
 @app.route("/rpc", methods=["POST"])

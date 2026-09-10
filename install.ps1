@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Windows MCP Server - Turnkey One-Liner Installer & Configurator
 .DESCRIPTION
@@ -22,7 +22,6 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $scriptDir = $PSScriptRoot
 if (-not $scriptDir) { $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
@@ -33,22 +32,22 @@ Set-Location $scriptDir
 function Print-Banner {
     Clear-Host
     Write-Host "======================================================================" -ForegroundColor Cyan
-    Write-Host "       🚀 Windows MCP Server - Turnkey Automated Installer            " -ForegroundColor White
+    Write-Host "       Windows MCP Server - Turnkey Automated Installer               " -ForegroundColor White
     Write-Host "======================================================================" -ForegroundColor Cyan
-    Write-Host "يحول جهاز Windows إلى MCP Server كامل للتحكم في كافة تطبيقات سطح المكتب" -ForegroundColor Gray
-    Write-Host "(Word, Excel, Outlook, Telegram, المتصفحات, PowerShell, النظام بالكامل)" -ForegroundColor Gray
-    Write-Host "عبر الذكاء الاصطناعي (Claude & ChatGPT) دون الحاجة لفتح بورت في الراوتر!" -ForegroundColor Yellow
+    Write-Host "Transforms this Windows PC into a remote AI desktop controller" -ForegroundColor Gray
+    Write-Host "(Word, Excel, Outlook, Telegram, Browsers, PowerShell, Full System)" -ForegroundColor Gray
+    Write-Host "Accessible via Claude & ChatGPT with zero router port forwarding!" -ForegroundColor Yellow
     Write-Host "======================================================================`n" -ForegroundColor Cyan
 }
 
 function Print-Step {
     param([string]$Title)
-    Write-Host "`n[▶] $Title..." -ForegroundColor Cyan
+    Write-Host "`n[>] $Title..." -ForegroundColor Cyan
 }
 
 function Print-Success {
     param([string]$Msg)
-    Write-Host " [✔] $Msg" -ForegroundColor Green
+    Write-Host " [OK] $Msg" -ForegroundColor Green
 }
 
 function Print-Warning {
@@ -91,18 +90,18 @@ if (-not $TunnelMode) {
     if ($NonInteractive) {
         $TunnelMode = "Quick"
     } else {
-        Write-Host "هل تريد دومين مجاني وتلقائي من Cloudflare أم لديك دومين خاص بك؟" -ForegroundColor White
+        Write-Host "Choose your Cloudflare tunnel mode:" -ForegroundColor White
         Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
-        Write-Host " [1] أريد دومين مجاني وتلقائي من Cloudflare (جاهز فوراً بدون أي إعدادات)" -ForegroundColor Green
-        Write-Host "     • لا تحتاج حساب على Cloudflare ولا تحتاج لشراء دومين."
-        Write-Host "     • يولد لك رابط HTTPS فوري مشفر ومحمي تلقائياً (*.trycloudflare.com)."
+        Write-Host " [1] Cloudflare Quick Tunnel (Free, automatic *.trycloudflare.com URL)" -ForegroundColor Green
+        Write-Host "     * Instant setup without requiring a Cloudflare account or domain."
+        Write-Host "     * Generates a temporary encrypted HTTPS tunnel URL."
         Write-Host ""
-        Write-Host " [2] لدي دومين خاص بي وأريد استخدامه (ليكون الرابط ثابتاً ودائماً دائماً)" -ForegroundColor Magenta
-        Write-Host "     • إذا كان لديك دومين مضاف مسبقاً في حسابك على Cloudflare."
-        Write-Host "     • ستحتاج فقط لإدخال الدومين والـ Tunnel Token الخاص بك."
+        Write-Host " [2] Custom Domain (Permanent, stable 24/7 URL) [Recommended]" -ForegroundColor Magenta
+        Write-Host "     * If you have a domain managed on Cloudflare."
+        Write-Host "     * Requires your domain name and Cloudflare Tunnel Token."
         Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
         
-        $choice = Read-Host "أدخل اختيارك [1 أو 2] (اضغط Enter للاختيار 1 التلقائي المجاني)"
+        $choice = Read-Host "Enter your choice [1 or 2] (Default: 1 - Quick Tunnel)"
         if ($choice -eq "2") {
             $TunnelMode = "Custom"
         } else {
@@ -112,21 +111,21 @@ if (-not $TunnelMode) {
 }
 
 if ($TunnelMode -eq "Custom") {
-    Write-Host "`n--- ربط الدومين الخاص بك (Custom Domain Setup) ---" -ForegroundColor Magenta
-    Write-Host "تعليمات سريعة من لوحة Cloudflare Zero Trust:" -ForegroundColor Yellow
-    Write-Host " 1. ادخل على: https://one.dash.cloudflare.com -> Networks -> Tunnels"
-    Write-Host " 2. أنشئ نفق جديد (Create Tunnel) وانسخ الـ Tunnel Token (يبدأ بـ eyJh...)."
-    Write-Host " 3. اربط الـ Public Hostname مع: Type = HTTP, URL = localhost:8765"
+    Write-Host "`n--- Custom Domain Setup ---" -ForegroundColor Magenta
+    Write-Host "Quick steps from Cloudflare Zero Trust dashboard:" -ForegroundColor Yellow
+    Write-Host " 1. Go to: https://one.dash.cloudflare.com -> Networks -> Tunnels"
+    Write-Host " 2. Create Tunnel and copy Tunnel Token (starts with eyJh...)."
+    Write-Host " 3. Route Public Hostname: Service Type = HTTP, URL = localhost:8765"
     Write-Host "----------------------------------------------------------------------`n" -ForegroundColor DarkGray
 
     $domainVerified = $false
     while (-not $domainVerified) {
         if (-not $CustomDomain) {
-            $CustomDomain = Read-Host "أدخل الدومين الخاص بك (مثال: mcp.yourdomain.com) [أو اضغط Enter للرجوع للدومين المجاني]"
+            $CustomDomain = Read-Host "Enter your custom domain (e.g., mcp.yourdomain.com) [or press Enter for Quick Tunnel]"
         }
         
         if (-not $CustomDomain) {
-            Write-Host "`n[!] تم اختيار المتابعة بالدومين المجاني التلقائي من Cloudflare." -ForegroundColor Yellow
+            Write-Host "`n[!] Proceeding with free Cloudflare Quick Tunnel." -ForegroundColor Yellow
             $TunnelMode = "Quick"
             $CustomDomain = ""
             $TunnelToken = ""
@@ -136,30 +135,30 @@ if ($TunnelMode -eq "Custom") {
         $CustomDomain = $CustomDomain.Replace("https://", "").Replace("http://", "").Trim("/")
 
         # Check if domain is connected to Cloudflare
-        Print-Step "جاري فحص ربط الدومين ($CustomDomain) مع خوادم Cloudflare"
+        Print-Step "Verifying domain connection ($CustomDomain) with Cloudflare nameservers"
         $cfCheck = Test-CloudflareDomain -Domain $CustomDomain
         
         if ($cfCheck.IsCloudflare) {
-            Print-Success "تم التحقق بنجاح: الدومين ($($cfCheck.BaseDomain)) مربوط ومعتمد على Cloudflare!"
+            Print-Success "Domain verified: ($($cfCheck.BaseDomain)) is connected to Cloudflare!"
             $domainVerified = $true
         } else {
-            Write-Host "`n[!] تنبيه: الدومين '$CustomDomain' لا يبدو أنه مربوط بخوادم Cloudflare حالياً!" -ForegroundColor Yellow
-            Write-Host "    (لم يتم العثور على Cloudflare Nameservers مثل: *.ns.cloudflare.com)" -ForegroundColor Gray
-            Write-Host "    لكي يعمل النفق، يجب إضافة الدومين إلى حسابك على Cloudflare أولاً." -ForegroundColor Gray
+            Write-Host "`n[!] Warning: Domain '$CustomDomain' does not appear to be routed through Cloudflare NS." -ForegroundColor Yellow
+            Write-Host "    (No Cloudflare Nameservers like *.ns.cloudflare.com were detected)" -ForegroundColor Gray
+            Write-Host "    To route traffic, the domain must be managed by your Cloudflare account." -ForegroundColor Gray
             Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
-            Write-Host " [1] إعادة إدخال الدومين مرة أخرى."
-            Write-Host " [2] المتابعة بالدومين المجاني التلقائي من Cloudflare مؤقتاً (Quick Tunnel)."
-            Write-Host " [3] المتابعة بهذا الدومين على أي حال (إذا قمت بربطه تواً وتنتظر انتشار الـ DNS)."
+            Write-Host " [1] Re-enter domain name."
+            Write-Host " [2] Switch to free Cloudflare Quick Tunnel temporarily."
+            Write-Host " [3] Continue with this domain anyway (if DNS propagation is in progress)."
             
-            $unverifiedChoice = Read-Host "أدخل اختيارك [1 أو 2 أو 3] (الافتراضي 1)"
+            $unverifiedChoice = Read-Host "Enter choice [1, 2, or 3] (Default: 1)"
             if ($unverifiedChoice -eq "2") {
                 $TunnelMode = "Quick"
                 $CustomDomain = ""
                 $TunnelToken = ""
-                Write-Host "`nتم التحويل إلى الدومين المجاني التلقائي من Cloudflare." -ForegroundColor Green
+                Write-Host "`nSwitched to free Cloudflare Quick Tunnel." -ForegroundColor Green
                 break
             } elseif ($unverifiedChoice -eq "3") {
-                Write-Host "`nتم اعتماد المتابعة بالدومين بالرغم من عدم اكتمال انتشار الـ DNS." -ForegroundColor Yellow
+                Write-Host "`nProceeding with domain regardless of DNS propagation check." -ForegroundColor Yellow
                 $domainVerified = $true
             } else {
                 $CustomDomain = "" # Reset to prompt again in loop
@@ -168,10 +167,10 @@ if ($TunnelMode -eq "Custom") {
     }
 
     if ($TunnelMode -eq "Custom" -and -not $TunnelToken) {
-        $TunnelToken = Read-Host "أدخل Cloudflare Tunnel Token (يبدأ بـ eyJh...)"
+        $TunnelToken = Read-Host "Enter Cloudflare Tunnel Token (starts with eyJh...)"
         if (-not $TunnelToken) {
-            Write-Host "`n[!] لم يتم إدخال التوكن. سيتم المتابعة بالدومين المجاني التلقائي من Cloudflare مؤقتاً." -ForegroundColor Yellow
-            Write-Host "يمكنك ربط دومينك في أي وقت لاحقاً بكتابة الأمر: winmcp domain`n" -ForegroundColor Cyan
+            Write-Host "`n[!] No token entered. Falling back to Quick Tunnel temporarily." -ForegroundColor Yellow
+            Write-Host "You can link your custom domain at any time by running: winmcp domain`n" -ForegroundColor Cyan
             $TunnelMode = "Quick"
             $CustomDomain = ""
         }
@@ -179,37 +178,37 @@ if ($TunnelMode -eq "Custom") {
 }
 
 # --- Step 2: Directories Initialization ---
-Print-Step "تجهيز مجلدات العمل وإعداد البيئة"
+Print-Step "Setting up workspace directories and environment"
 $dirs = @("$scriptDir\bin", "$scriptDir\gateway", "$scriptDir\tunnel\cloudflare", "$scriptDir\logs")
 foreach ($d in $dirs) {
     if (!(Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
 }
-Print-Success "المجلدات جاهزة في: $scriptDir"
+Print-Success "Directories ready at: $scriptDir"
 
 # --- Step 3: Python Environment Check ---
-Print-Step "فحص بيئة Python والمكتبات"
+Print-Step "Checking Python environment and dependencies"
 $pythonCmd = Get-Command "python" -ErrorAction SilentlyContinue
 if (-not $pythonCmd) {
-    Write-Error "لم يتم العثور على Python مثبت على الجهاز! يرجى تثبيت Python 3.10+ أولاً."
+    Write-Error "Python was not found on this machine! Please install Python 3.10+ first."
     exit 1
 }
-Print-Success "Python مثبت: $($pythonCmd.Source)"
+Print-Success "Python detected: $($pythonCmd.Source)"
 
 # Ensure Flask and Requests are installed
 try {
     & python -c "import flask, requests" 2>$null
-    Print-Success "المكتبات المطلوبة (Flask, Requests) متوفرة."
+    Print-Success "Required packages (Flask, Requests) are installed."
 } catch {
-    Write-Host "تثبيت المكتبات المطلوبة..." -ForegroundColor Yellow
+    Write-Host "Installing required packages..." -ForegroundColor Yellow
     & python -m pip install flask requests --quiet
-    Print-Success "تم تثبيت المكتبات بنجاح."
+    Print-Success "Packages installed successfully."
 }
 
 # --- Step 4: Download windows-mcp-server binary ---
-Print-Step "التحقق من باينري المحرك الرسمي (windows-mcp-server)"
+Print-Step "Verifying official engine binary (windows-mcp-server)"
 $mcpExe = "$scriptDir\bin\windows-mcp-server.exe"
 if (-not (Test-Path $mcpExe)) {
-    Write-Host "تنزيل windows-mcp-server v1.4.0 الرسمية..." -ForegroundColor Yellow
+    Write-Host "Downloading windows-mcp-server v1.4.0 official binary..." -ForegroundColor Yellow
     $zipPath = "$scriptDir\bin\windows-mcp-server.zip"
     $dlUrl = "https://github.com/deploymenttheory/windows-mcp-server/releases/download/v1.4.0/windows-mcp-server_1.4.0_windows_amd64.zip"
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -217,22 +216,22 @@ if (-not (Test-Path $mcpExe)) {
     Expand-Archive -Path $zipPath -DestinationPath "$scriptDir\bin" -Force
     Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
 }
-Print-Success "المحرك الرسمي جاهز: $mcpExe"
+Print-Success "Engine binary ready: $mcpExe"
 
 # --- Step 5: Download cloudflared binary ---
-Print-Step "التحقق من نفق Cloudflare Tunnel (cloudflared)"
+Print-Step "Verifying Cloudflare Tunnel binary (cloudflared)"
 $cfExe = "$scriptDir\tunnel\cloudflare\cloudflared.exe"
 if (-not (Test-Path $cfExe)) {
-    Write-Host "تنزيل cloudflared.exe عبر curl..." -ForegroundColor Yellow
+    Write-Host "Downloading cloudflared.exe..." -ForegroundColor Yellow
     curl.exe -L -o $cfExe "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
 }
-Print-Success "باينري cloudflared جاهز: $cfExe"
+Print-Success "cloudflared binary ready: $cfExe"
 
 # --- Step 5.1: Download nssm binary ---
-Print-Step "التحقق من أداة خدمات الويندوز (nssm)"
+Print-Step "Verifying Windows Service manager (nssm)"
 $nssmExe = "$scriptDir\bin\nssm.exe"
 if (-not (Test-Path $nssmExe)) {
-    Write-Host "تنزيل nssm v2.24..." -ForegroundColor Yellow
+    Write-Host "Downloading nssm v2.24..." -ForegroundColor Yellow
     $nssmZip = "$scriptDir\bin\nssm.zip"
     curl.exe -L -o $nssmZip "https://nssm.cc/release/nssm-2.24.zip"
     if (Test-Path $nssmZip) {
@@ -241,10 +240,10 @@ if (-not (Test-Path $nssmExe)) {
         Remove-Item "$scriptDir\bin\nssm_temp", $nssmZip -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
-Print-Success "أداة nssm جاهزة: $nssmExe"
+Print-Success "nssm binary ready: $nssmExe"
 
 # --- Step 6: Configure Environment & Tokens ---
-Print-Step "تأمين الاتصال وإعداد مفتاح الأمان (Bearer Token)"
+Print-Step "Configuring security authentication (Bearer Token)"
 $envFile = "$scriptDir\.env"
 $token = ""
 
@@ -256,33 +255,33 @@ if (Test-Path $envFile) {
 }
 
 if ($token) {
-    Write-Host "تم العثور على مفتاح أمان موجود مسبقاً: $($token.Substring(0, 8))...$($token.Substring($token.Length - 6))" -ForegroundColor Gray
-    $changeT = Read-Host "هل تريد الاحتفاظ بالمفتاح الحالي أم تغييره؟ [اضغط Enter للاحتفاظ / اكتب 'c' للتغيير]"
+    Write-Host "Existing security token detected: $($token.Substring(0, 8))...$($token.Substring($token.Length - 6))" -ForegroundColor Gray
+    $changeT = Read-Host "Keep existing token or generate new? [Press Enter to keep / Type 'c' to change]"
     if ($changeT.ToLower() -eq "c") {
         $token = ""
     } else {
-        Print-Success "تم اعتماد المفتاح الحالي."
+        Print-Success "Existing token preserved."
     }
 }
 
 if (-not $token) {
-    Write-Host "`nاختر طريقة إنشاء مفتاح الأمان (Token):" -ForegroundColor White
-    Write-Host " [1] توليد مفتاح عشوائي فائق التشفير (موصى به - 256-bit Random)" -ForegroundColor Green
-    Write-Host " [2] كتابة مفتاح أمان مخصص من اختياري (Custom Token)" -ForegroundColor Magenta
+    Write-Host "`nChoose Bearer authentication token creation method:" -ForegroundColor White
+    Write-Host " [1] Generate cryptographically secure random token (256-bit Random - Recommended)" -ForegroundColor Green
+    Write-Host " [2] Enter a custom secret token of my choice" -ForegroundColor Magenta
     
-    $tokenChoice = Read-Host "أدخل اختيارك [1 أو 2] (الافتراضي 1)"
+    $tokenChoice = Read-Host "Enter choice [1 or 2] (Default: 1)"
     if ($tokenChoice -eq "2") {
         while (-not $token) {
-            $token = Read-Host "أدخل مفتاح الأمان المخصص الخاص بك"
+            $token = Read-Host "Enter your custom secret token"
             $token = $token.Trim()
-            if (-not $token) { Write-Host "لا يمكن ترك المفتاح فارغاً!" -ForegroundColor Yellow }
+            if (-not $token) { Write-Host "Token cannot be empty!" -ForegroundColor Yellow }
         }
-        Print-Success "تم تعيين المفتاح المخصص بنجاح."
+        Print-Success "Custom token set successfully."
     } else {
         $bytes = New-Object byte[] 32
         [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
         $token = -join ($bytes | ForEach-Object { "{0:x2}" -f $_ })
-        Print-Success "تم إنشاء مفتاح أمان عشوائي فائق التشفير بنجاح."
+        Print-Success "Generated secure random 256-bit Bearer token."
     }
 }
 
@@ -299,10 +298,10 @@ WINMCP_TUNNEL_TOKEN=$TunnelToken
 WINMCP_CUSTOM_DOMAIN=$CustomDomain
 "@ | Out-File -FilePath $envFile -Encoding utf8 -Force
 
-Print-Success "تم حفظ الإعدادات بأمان في: $envFile"
+Print-Success "Settings securely saved to: $envFile"
 
 # --- Step 7: Register Auto-start in Windows Task Scheduler & Startup Folder ---
-Print-Step "ضبط التشغيل التلقائي مع بدء الويندوز والعمل في الخلفية (Background Services)"
+Print-Step "Configuring 24/7 background auto-start and reboot survival"
 $taskName = "WindowsMCPServer"
 $runnerScript = "$scriptDir\run_winmcp.ps1"
 
@@ -312,10 +311,10 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 0)
 
 try {
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts Windows MCP Server & Gateway on logon" -Force | Out-Null
-    Print-Success "تم تسجيل مهمة التشغيل التلقائي في Task Scheduler ($taskName)"
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts Windows MCP Server on user logon" -Force | Out-Null
+    Print-Success "Task registered in Windows Task Scheduler ($taskName)"
 } catch {
-    Print-Warning "تعذر تسجيل المهمة المجدولة: $($_.Exception.Message)"
+    Print-Warning "Task Scheduler notice: $($_.Exception.Message)"
 }
 
 # 2. Windows Startup Folder (shell:startup)
@@ -328,61 +327,30 @@ WshShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hid
 "@
 try {
     $vbsContent | Out-File -FilePath $vbsPath -Encoding ascii -Force
-    Print-Success "تم تفعيل المشغل الصامت في مجلد بدء التشغيل (Startup Folder)"
+    Print-Success "Silent launcher configured in Windows Startup folder."
 } catch {}
 
 # --- Step 8: Add winmcp to User PATH ---
-Print-Step "إضافة أمر winmcp في موجه الأوامر"
+Print-Step "Adding winmcp command to User PATH environment variable"
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath -notmatch [regex]::Escape($scriptDir)) {
     [Environment]::SetEnvironmentVariable("Path", "$userPath;$scriptDir", "User")
     $env:Path += ";$scriptDir"
-    Print-Success "تم إضافة '$scriptDir' إلى PATH (يمكنك كتابة winmcp في أي وقت)."
+    Print-Success "Added '$scriptDir' to User PATH. You can run 'winmcp' anywhere."
 } else {
-    Print-Success "أمر winmcp متاح بالفعل في PATH."
+    Print-Success "winmcp is already present in User PATH."
 }
 
 # --- Step 9: Launch Server & Tunnel ---
-Print-Step "بدء تشغيل الخادم والنفق السحابي الآن"
-& "$scriptDir\stop_winmcp.ps1" | Out-Null
-Start-Sleep -Seconds 1
+Print-Step "Starting WinMCP Server and Tunnel now"
+& "$scriptDir\run_winmcp.ps1"
 
-# Start Gateway
-$gatewayPy = "$scriptDir\gateway\server.py"
-Start-Process -FilePath "python.exe" -ArgumentList "-u `"$gatewayPy`"" -RedirectStandardOutput "$scriptDir\logs\gateway.log" -RedirectStandardError "$scriptDir\logs\gateway_error.log" -WindowStyle Hidden
-
-# Wait for local health
-$isReady = $false
-for ($i = 0; $i -lt 15; $i++) {
-    Start-Sleep -Seconds 1
-    try {
-        $res = Invoke-RestMethod -Uri "http://127.0.0.1:8765/health" -TimeoutSec 2 -ErrorAction SilentlyContinue
-        if ($res.status -eq "ok") {
-            $isReady = $true
-            break
-        }
-    } catch {}
-}
-
-if (-not $isReady) {
-    Write-Error "استغرق الخادم وقتاً أطول من المعتاد للبدء. تفقد السجلات في logs/gateway_error.log"
-    exit 1
-}
-Print-Success "البوابة الوسيطة تعمل على http://127.0.0.1:8765"
-
-# Start Tunnel
-if ($TunnelMode -eq "Custom" -and $TunnelToken) {
-    Write-Host "تشغيل نفق Cloudflare المخصص..." -ForegroundColor Yellow
-    Start-Process -FilePath $cfExe -ArgumentList "tunnel run --token $TunnelToken" -RedirectStandardOutput "$scriptDir\logs\cloudflared_error.log" -RedirectStandardError "$scriptDir\logs\cloudflared_error.log" -WindowStyle Hidden
+# Determine endpoint URL
+if ($TunnelMode -eq "Custom" -and $CustomDomain) {
     $finalPublicUrl = "https://$CustomDomain"
 } else {
-    Write-Host "تشغيل Cloudflare Quick Tunnel..." -ForegroundColor Yellow
-    Remove-Item -Path "$scriptDir\logs\cloudflared_error.log" -Force -ErrorAction SilentlyContinue
-    Start-Process -FilePath $cfExe -ArgumentList "tunnel --url http://127.0.0.1:8765" -RedirectStandardOutput "$scriptDir\logs\cloudflared_error.log" -RedirectStandardError "$scriptDir\logs\cloudflared_error.log" -WindowStyle Hidden
-    
-    # Wait for URL to appear in log
     $finalPublicUrl = ""
-    for ($i = 0; $i -lt 25; $i++) {
+    for ($i = 0; $i -lt 15; $i++) {
         Start-Sleep -Seconds 1
         if (Test-Path "$scriptDir\logs\cloudflared_error.log") {
             $match = Get-Content "$scriptDir\logs\cloudflared_error.log" | Where-Object { $_ -match "(https://[a-zA-Z0-9-]+\.trycloudflare\.com)" } | Select-Object -Last 1
@@ -392,46 +360,42 @@ if ($TunnelMode -eq "Custom" -and $TunnelToken) {
             }
         }
     }
-}
-
-if (-not $finalPublicUrl) {
-    $finalPublicUrl = "https://<PENDING_TUNNEL_URL>"
-    Print-Warning "النفق قيد الاتصال. يمكنك كتابة 'winmcp status' بعد ثوانٍ لعرض الرابط."
-} else {
-    Print-Success "تم إنشاء الرابط الخارجي المشفر بنجاح: $finalPublicUrl"
+    if (-not $finalPublicUrl) {
+        $finalPublicUrl = "https://<PENDING_TUNNEL_URL>"
+    }
 }
 
 # --- Step 10: Final Success Banner ---
-Write-Host "`n`n======================================================================" -ForegroundColor Green
-Write-Host "   🎉  تم تثبيت وتشغيل Windows MCP Server بنجاح فائق!                 " -ForegroundColor White
+Write-Host "`n======================================================================" -ForegroundColor Green
+Write-Host "   WinMCP Server Installed and Started Successfully!                  " -ForegroundColor White
 Write-Host "======================================================================" -ForegroundColor Green
 
-Write-Host "`n📡 روابط الوصول إلى جهازك (Endpoints):" -ForegroundColor Cyan
-Write-Host "  • الرابط الأساسي (Gateway)    : " -NoNewline -ForegroundColor Gray
+Write-Host "`nAccess Endpoints:" -ForegroundColor Cyan
+Write-Host "  * Public URL            : " -NoNewline -ForegroundColor Gray
 Write-Host $finalPublicUrl -ForegroundColor White
-Write-Host "  • رابط ChatGPT (Streamable)   : " -NoNewline -ForegroundColor Gray
+Write-Host "  * ChatGPT Endpoint      : " -NoNewline -ForegroundColor Gray
 Write-Host "$finalPublicUrl/mcp" -ForegroundColor Yellow
-Write-Host "  • رابط Claude Web (SSE URL)   : " -NoNewline -ForegroundColor Gray
+Write-Host "  * Claude Web SSE URL    : " -NoNewline -ForegroundColor Gray
 Write-Host "$finalPublicUrl/sse?token=$token" -ForegroundColor Yellow
 
-Write-Host "`n🔑 مفتاح الأمان (Bearer Token):" -ForegroundColor Cyan
+Write-Host "`nBearer Authentication Token:" -ForegroundColor Cyan
 Write-Host "  $token" -ForegroundColor White
 
 Write-Host "`n----------------------------------------------------------------------" -ForegroundColor DarkCyan
-Write-Host "🤖 1. طريقة التوصيل مع Claude Web (claude.ai):" -ForegroundColor White
-Write-Host "  1. ادخل على claude.ai -> Settings -> Integrations (أو Connectors)."
-Write-Host "  2. اختر Add Custom MCP Connector."
-Write-Host "  3. الصق الرابط التالي مباشرة:" -ForegroundColor Gray
+Write-Host "1. How to connect with Claude Web (claude.ai):" -ForegroundColor White
+Write-Host "  1. Open claude.ai -> Settings -> Integrations (or Connectors)."
+Write-Host "  2. Click Add Custom MCP Connector."
+Write-Host "  3. Paste this exact SSE URL:" -ForegroundColor Gray
 Write-Host "     $finalPublicUrl/sse?token=$token" -ForegroundColor Cyan
 
-Write-Host "`n🤖 2. طريقة التوصيل مع ChatGPT (Custom GPTs / Actions):" -ForegroundColor White
-Write-Host "  1. في لوحة Custom GPTs أضف Action / MCP Endpoint."
-Write-Host "  2. الرابط: $finalPublicUrl/mcp" -ForegroundColor Cyan
-Write-Host "  3. نوع التوثيق: Bearer Token"
-Write-Host "  4. التوكن: $token"
+Write-Host "`n2. How to connect with ChatGPT (Custom GPTs / Actions):" -ForegroundColor White
+Write-Host "  1. In Custom GPT editor, add an Action / MCP Server."
+Write-Host "  2. Server URL     : $finalPublicUrl/mcp" -ForegroundColor Cyan
+Write-Host "  3. Authentication : Bearer Token"
+Write-Host "  4. Secret Token   : $token"
 
-Write-Host "`n💻 3. طريقة التوصيل مع Claude Desktop (محلياً على نفس الجهاز):" -ForegroundColor White
-Write-Host "  أضف الكود التالي في ملف claude_desktop_config.json:" -ForegroundColor Gray
+Write-Host "`n3. Local Connection with Claude Desktop:" -ForegroundColor White
+Write-Host "  Add the following to %APPDATA%\Claude\claude_desktop_config.json:" -ForegroundColor Gray
 Write-Host @"
 {
   "mcpServers": {
@@ -443,10 +407,13 @@ Write-Host @"
 }
 "@ -ForegroundColor DarkYellow
 
-Write-Host "`n⚡ أوامر الإدارة السريعة (في أي وقت من PowerShell):" -ForegroundColor Cyan
-Write-Host "  winmcp status    - عرض حالة السيرفر والرابط الخارجي النشط"
-Write-Host "  winmcp stop      - إيقاف السيرفر والنفق"
-Write-Host "  winmcp start     - تشغيل السيرفر والنفق مجدداً"
-Write-Host "  winmcp logs      - متابعة أوامر الـ AI لحظياً"
-Write-Host "  winmcp token     - عرض مفتاح الأمان"
+Write-Host "`nUseful CLI Commands (run anytime in terminal):" -ForegroundColor Cyan
+Write-Host "  winmcp status    - Show dashboard and public URL"
+Write-Host "  winmcp stop      - Stop all WinMCP processes"
+Write-Host "  winmcp start     - Launch server and tunnel"
+Write-Host "  winmcp restart   - Restart server and refresh tunnel"
+Write-Host "  winmcp domain    - Change or link custom domain"
+Write-Host "  winmcp token     - View, rotate, or set custom token"
+Write-Host "  winmcp logs      - Stream real-time audit logs"
+Write-Host "  winmcp uninstall - Completely uninstall and reset from roots"
 Write-Host "======================================================================`n" -ForegroundColor Green

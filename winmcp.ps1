@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     WinMCP - Windows MCP Server Management CLI
 .DESCRIPTION
@@ -264,16 +264,16 @@ function Manage-Token {
     if (-not $SubAction) {
         if ($token) {
             Write-Host "`n========================================================" -ForegroundColor Cyan
-            Write-Host "           مفتاح الأمان الحالي (Current Token)           " -ForegroundColor White
+            Write-Host "           Current Bearer Authentication Token          " -ForegroundColor White
             Write-Host "========================================================" -ForegroundColor Cyan
             Write-Host $token -ForegroundColor Yellow
-            Write-Host "`nطريقة الربط (Authentication):" -ForegroundColor DarkCyan
-            Write-Host "  • For ChatGPT    : Authorization: Bearer $token" -ForegroundColor White
-            Write-Host "  • For Claude Web : Append '?token=$token' to the SSE URL" -ForegroundColor White
-            Write-Host "`nأوامر تغيير وتدوير المفتاح (Rotate / Change):" -ForegroundColor DarkGray
-            Write-Host "  winmcp token new             - توليد مفتاح عشوائي جديد (256-bit Random)" -ForegroundColor DarkGray
-            Write-Host "  winmcp token set <your_key>  - تعيين مفتاح أمان مخصص من كتابتك" -ForegroundColor DarkGray
-            Write-Host "  winmcp token change          - فتح المعالج التفاعلي للاختيار بين العشوائي والمخصص`n" -ForegroundColor DarkGray
+            Write-Host "`nAuthentication Usage:" -ForegroundColor DarkCyan
+            Write-Host "  * For ChatGPT    : Authorization: Bearer $token" -ForegroundColor White
+            Write-Host "  * For Claude Web : Append '?token=$token' to the SSE URL" -ForegroundColor White
+            Write-Host "`nToken Management Commands:" -ForegroundColor DarkGray
+            Write-Host "  winmcp token new             - Generate a new random 256-bit token" -ForegroundColor DarkGray
+            Write-Host "  winmcp token set <your_key>  - Set a custom token of your choice" -ForegroundColor DarkGray
+            Write-Host "  winmcp token change          - Interactive wizard to rotate or customize`n" -ForegroundColor DarkGray
         } else {
             Write-Host "No token found in .env" -ForegroundColor Red
         }
@@ -284,25 +284,25 @@ function Manage-Token {
     switch ($SubAction.ToLower()) {
         "new" {
             $newToken = Generate-RandomToken
-            Write-Host "تم توليد مفتاح أمان عشوائي جديد فائق التشفير (256-bit Random)." -ForegroundColor Green
+            Write-Host "Generated new secure random 256-bit token." -ForegroundColor Green
         }
         "random" {
             $newToken = Generate-RandomToken
-            Write-Host "تم توليد مفتاح أمان عشوائي جديد فائق التشفير (256-bit Random)." -ForegroundColor Green
+            Write-Host "Generated new secure random 256-bit token." -ForegroundColor Green
         }
         "rotate" {
             $newToken = Generate-RandomToken
-            Write-Host "تم تدوير المفتاح وتوليد مفتاح عشوائي جديد (256-bit Random)." -ForegroundColor Green
+            Write-Host "Rotated token: Generated new secure random 256-bit token." -ForegroundColor Green
         }
         "generate" {
             $newToken = Generate-RandomToken
-            Write-Host "تم توليد مفتاح أمان عشوائي جديد فائق التشفير (256-bit Random)." -ForegroundColor Green
+            Write-Host "Generated new secure random 256-bit token." -ForegroundColor Green
         }
         "set" {
             if ($CustomValue) {
                 $newToken = $CustomValue.Trim()
             } else {
-                $newToken = Read-Host "أدخل مفتاح الأمان المخصص الجديد (Enter your custom token)"
+                $newToken = Read-Host "Enter your new custom secret token"
                 $newToken = $newToken.Trim()
             }
         }
@@ -310,40 +310,40 @@ function Manage-Token {
             if ($CustomValue) {
                 $newToken = $CustomValue.Trim()
             } else {
-                $newToken = Read-Host "أدخل مفتاح الأمان المخصص الجديد (Enter your custom token)"
+                $newToken = Read-Host "Enter your new custom secret token"
                 $newToken = $newToken.Trim()
             }
         }
         "change" {
             Write-Host "`n========================================================" -ForegroundColor Cyan
-            Write-Host "           إدارة وتغيير مفتاح الأمان (Token)            " -ForegroundColor White
+            Write-Host "             Security Token Management                  " -ForegroundColor White
             Write-Host "========================================================" -ForegroundColor Cyan
             if ($token) {
-                Write-Host "المفتاح الحالي: $token`n" -ForegroundColor DarkGray
+                Write-Host "Current Token: $token`n" -ForegroundColor DarkGray
             }
-            Write-Host "اختر طريقة تغيير المفتاح:" -ForegroundColor White
+            Write-Host "Choose how to update your authentication token:" -ForegroundColor White
             Write-Host "--------------------------------------------------------" -ForegroundColor DarkCyan
-            Write-Host " [1] توليد مفتاح أمان عشوائي فائق التشفير (Random 256-bit)" -ForegroundColor Green
-            Write-Host "     • يولد مفتاحاً مشفراً قوياً تلقائياً من 64 خانة."
-            Write-Host " [2] كتابة مفتاح أمان مخصص بنفسي (Custom Token)" -ForegroundColor Magenta
-            Write-Host "     • يمكنك كتابة وتحديد أي كلمة سر أو مفتاح تريده بنفسك."
-            Write-Host " [3] إلغاء والاحتفاظ بالمفتاح الحالي" -ForegroundColor DarkGray
+            Write-Host " [1] Generate cryptographically secure random token (256-bit)" -ForegroundColor Green
+            Write-Host "     * Automatically generates a high-entropy 64-character hex key."
+            Write-Host " [2] Enter a custom secret token of my choice" -ForegroundColor Magenta
+            Write-Host "     * Type your own custom passphrase or secret key."
+            Write-Host " [3] Cancel and keep current token" -ForegroundColor DarkGray
             Write-Host "--------------------------------------------------------" -ForegroundColor DarkCyan
-            $c = Read-Host "أدخل اختيارك [1 أو 2 أو 3] (الافتراضي 1)"
+            $c = Read-Host "Enter choice [1, 2, or 3] (Default: 1)"
             if ($c -eq "2") {
                 while (-not $newToken) {
-                    $newToken = Read-Host "أدخل التوكن المخصص الجديد الخاص بك (Custom Token)"
+                    $newToken = Read-Host "Enter your new custom secret token"
                     $newToken = $newToken.Trim()
                     if (-not $newToken) {
-                        Write-Host "لا يمكن ترك المفتاح فارغاً!" -ForegroundColor Yellow
+                        Write-Host "Token cannot be empty!" -ForegroundColor Yellow
                     }
                 }
             } elseif ($c -eq "3") {
-                Write-Host "تم إلغاء تغيير المفتاح والاحتفاظ بالمفتاح الحالي." -ForegroundColor Yellow
+                Write-Host "Token change canceled. Keeping current token." -ForegroundColor Yellow
                 return
             } else {
                 $newToken = Generate-RandomToken
-                Write-Host "تم توليد مفتاح عشوائي مشفر جديد بنجاح." -ForegroundColor Green
+                Write-Host "Generated new secure random 256-bit token." -ForegroundColor Green
             }
         }
         default {
@@ -374,22 +374,22 @@ function Manage-Token {
         $tunnelUrl = Get-TunnelUrl
 
         Write-Host "`n========================================================" -ForegroundColor Green
-        Write-Host "       [✔] تم تحديث مفتاح الأمان (Token) بنجاح!         " -ForegroundColor White
+        Write-Host "       [OK] Bearer Token Successfully Updated!           " -ForegroundColor White
         Write-Host "========================================================" -ForegroundColor Green
-        Write-Host "المفتاح الجديد (New Token):" -ForegroundColor White
+        Write-Host "New Token:" -ForegroundColor White
         Write-Host $newToken -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "طريقة الاستخدام مع أدوات الذكاء الاصطناعي:" -ForegroundColor Cyan
-        Write-Host " • مع ChatGPT: اختر Bearer Token وألصق المفتاح الجديد." -ForegroundColor White
+        Write-Host "How to use with AI Models:" -ForegroundColor Cyan
+        Write-Host " * With ChatGPT   : Select Bearer Token and paste the new token." -ForegroundColor White
         if ($tunnelUrl) {
-            Write-Host " • مع Claude Web: الرابط المحدث:" -ForegroundColor White
+            Write-Host " * With Claude Web: Updated connection URL:" -ForegroundColor White
             Write-Host "   $tunnelUrl/sse?token=$newToken" -ForegroundColor Cyan
         }
         Write-Host "--------------------------------------------------------" -ForegroundColor DarkGray
-        Write-Host "جاري إعادة تشغيل السيرفر لتطبيق التوكن الجديد فوراً..." -ForegroundColor Yellow
+        Write-Host "Restarting server to apply new authentication token..." -ForegroundColor Yellow
         Restart-WinMCP
     } else {
-        Write-Host "تم إلغاء تغيير المفتاح." -ForegroundColor Yellow
+        Write-Host "Token update canceled." -ForegroundColor Yellow
     }
 }
 
@@ -402,7 +402,7 @@ function Clean-WinMCP {
         Get-ChildItem "$logDir\*.log" -ErrorAction SilentlyContinue | ForEach-Object {
             Clear-Content -Path $_.FullName -Force
         }
-        Write-Host " [✔] Cleared all runtime logs." -ForegroundColor Green
+        Write-Host " [OK] Cleared all runtime logs." -ForegroundColor Green
     }
 
     # 2. Remove pycache
@@ -416,7 +416,7 @@ function Clean-WinMCP {
         Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    Write-Host " [✔] Removed temporary caches and scratch folders." -ForegroundColor Green
+    Write-Host " [OK] Removed temporary caches and scratch folders." -ForegroundColor Green
     Write-Host "`nProject is completely clean and sanitized of any personal or machine-specific data!" -ForegroundColor Cyan
 }
 
@@ -455,13 +455,13 @@ function Set-Domain {
     )
     
     if (-not $DomainName) {
-        Write-Host "`nهل تريد استخدام دومين مجاني من Cloudflare أم ربط دومين خاص بك؟" -ForegroundColor Cyan
+        Write-Host "`nChoose tunnel connection mode:" -ForegroundColor Cyan
         Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
-        Write-Host " [1] لدي دومين خاص بي وأريد استخدامه (Custom Domain دائم وثابت للأبد)" -ForegroundColor Magenta
-        Write-Host " [2] أريد دومين مجاني وتلقائي من Cloudflare (Quick Tunnel فوري بدون أي إعدادات)" -ForegroundColor Green
+        Write-Host " [1] Custom Domain (Permanent, stable, and fixed URL)" -ForegroundColor Magenta
+        Write-Host " [2] Quick Tunnel (Temporary free tunnel on *.trycloudflare.com)" -ForegroundColor Green
         Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
         
-        $choice = Read-Host "أدخل اختيارك [1 أو 2] (الافتراضي 1)"
+        $choice = Read-Host "Enter your choice [1 or 2] (Default: 1)"
         if ($choice -eq "2") {
             # Switch to Quick Tunnel
             $content = Get-Content $envFile
@@ -473,51 +473,51 @@ function Set-Domain {
                 else { $newContent += $line }
             }
             $newContent | Out-File -FilePath $envFile -Encoding utf8 -Force
-            Write-Host "`n[✔] تم التبديل إلى الدومين المجاني التلقائي من Cloudflare!" -ForegroundColor Green
+            Write-Host "`n[OK] Switched to Cloudflare Quick Tunnel!" -ForegroundColor Green
             Restart-WinMCP
             return
         }
 
-        Write-Host "`n--- ربط الدومين المخصص الخاص بك (Custom Domain) ---" -ForegroundColor Cyan
-        Write-Host "خطوات Cloudflare المطلوبة:" -ForegroundColor Yellow
-        Write-Host " 1. ادخل على: https://one.dash.cloudflare.com -> Networks -> Tunnels"
-        Write-Host " 2. أنشئ نفق جديد وانسخ الـ Tunnel Token (يبدأ بـ eyJh...)."
-        Write-Host " 3. اربط الـ Public Hostname: Service Type = HTTP, URL = localhost:8765"
+        Write-Host "`n--- Custom Domain Setup ---" -ForegroundColor Cyan
+        Write-Host "Cloudflare Zero Trust setup steps:" -ForegroundColor Yellow
+        Write-Host " 1. Open: https://one.dash.cloudflare.com -> Networks -> Tunnels"
+        Write-Host " 2. Create a new tunnel and copy the Tunnel Token (starts with eyJh...)."
+        Write-Host " 3. Route Public Hostname: Service Type = HTTP, URL = localhost:8765"
         Write-Host "--------------------------------------------------------" -ForegroundColor DarkGray
         
-        $DomainName = Read-Host "أدخل النطاق الخاص بك (مثال: mcp.yourdomain.com)"
+        $DomainName = Read-Host "Enter your domain (e.g., mcp.yourdomain.com)"
     }
 
     if (-not $DomainName) {
-        Write-Host "تم الإلغاء. لم يتم إدخال الدومين." -ForegroundColor Yellow
+        Write-Host "Canceled. No domain entered." -ForegroundColor Yellow
         return
     }
 
     $DomainName = $DomainName.Replace("https://", "").Replace("http://", "").Trim("/")
 
     # Verify domain on Cloudflare
-    Write-Host "`n[▶] جاري فحص ربط الدومين ($DomainName) مع خوادم Cloudflare..." -ForegroundColor Cyan
+    Write-Host "`n[>] Verifying domain ($DomainName) with Cloudflare nameservers..." -ForegroundColor Cyan
     $cfCheck = Test-CloudflareDomain -Domain $DomainName
 
     if ($cfCheck.IsCloudflare) {
-        Write-Host " [✔] تم التحقق بنجاح: الدومين ($($cfCheck.BaseDomain)) مربوط ومعتمد على Cloudflare!" -ForegroundColor Green
+        Write-Host " [OK] Domain verified: ($($cfCheck.BaseDomain)) is connected to Cloudflare!" -ForegroundColor Green
     } else {
-        Write-Host "`n[!] تنبيه: الدومين '$DomainName' لا يبدو أنه مربوط بخوادم Cloudflare حالياً!" -ForegroundColor Yellow
-        Write-Host "    (لم يتم العثور على Cloudflare Nameservers مثل: *.ns.cloudflare.com)" -ForegroundColor Gray
-        Write-Host "    لكي يعمل النفق، يجب أن يكون الدومين مضافاً في حسابك على Cloudflare أولاً." -ForegroundColor Gray
+        Write-Host "`n[!] Warning: Domain '$DomainName' does not appear to be routed through Cloudflare NS." -ForegroundColor Yellow
+        Write-Host "    (No Cloudflare Nameservers like *.ns.cloudflare.com were detected)" -ForegroundColor Gray
+        Write-Host "    Make sure the domain is added to your Cloudflare account." -ForegroundColor Gray
         Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkGray
-        Write-Host " [1] إلغاء العملية والعودة."
-        Write-Host " [2] المتابعة بالرغم من ذلك (إذا قمت بربطه تواً ولم يكتمل انتشار الـ DNS بعد)."
+        Write-Host " [1] Cancel and re-enter domain."
+        Write-Host " [2] Continue anyway (if recently configured and DNS is still propagating)."
         
-        $unv = Read-Host "أدخل اختيارك [1 أو 2] (الافتراضي 1)"
+        $unv = Read-Host "Enter choice [1 or 2] (Default: 1)"
         if ($unv -ne "2") {
-            Write-Host "تم إلغاء ربط الدومين." -ForegroundColor Yellow
+            Write-Host "Domain setup canceled." -ForegroundColor Yellow
             return
         }
     }
 
     if (-not $TokenValue) {
-        $TokenValue = Read-Host "أدخل Cloudflare Tunnel Token (يبدأ بـ eyJh...)"
+        $TokenValue = Read-Host "Enter Cloudflare Tunnel Token (starts with eyJh...)"
     }
 
     if ($DomainName -and $TokenValue) {
@@ -532,11 +532,11 @@ function Set-Domain {
         }
         $newContent | Out-File -FilePath $envFile -Encoding utf8 -Force
         
-        Write-Host "`n[✔] تم حفظ إعدادات النطاق الدائم في .env بنجاح!" -ForegroundColor Green
-        Write-Host "جاري إعادة تشغيل السيرفر وتفعيل النفق المخصص..." -ForegroundColor Yellow
+        Write-Host "`n[OK] Custom domain configuration saved to .env successfully!" -ForegroundColor Green
+        Write-Host "Restarting server to activate custom domain tunnel..." -ForegroundColor Yellow
         Restart-WinMCP
     } else {
-        Write-Host "تم الإلغاء. لم يتم إدخال التوكن." -ForegroundColor Yellow
+        Write-Host "Canceled. Token was not provided." -ForegroundColor Yellow
     }
 }
 
