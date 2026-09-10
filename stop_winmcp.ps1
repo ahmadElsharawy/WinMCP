@@ -1,11 +1,6 @@
 # WinMCP Cleanup / Stopper Script
 Write-Output "Stopping WinMCP processes..."
 
-# 0. Graceful API shutdown if gateway is alive
-try {
-    $null = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/server/stop" -Method POST -TimeoutSec 1 -ErrorAction SilentlyContinue
-} catch {}
-
 # 1. Stop windows-mcp-server
 Get-Process -Name "windows-mcp-server" -ErrorAction SilentlyContinue | ForEach-Object {
     try {
@@ -33,9 +28,9 @@ Get-Process -Name "rathole" -ErrorAction SilentlyContinue | ForEach-Object {
     } catch {}
 }
 
-# 4. Stop python processes running gateway/server.py or start_daemon.py
+# 4. Stop python processes running gateway/server.py, start_daemon.py, or service_runner.py
 try {
-    Get-CimInstance Win32_Process -Filter "Name = 'python.exe' or Name = 'pythonw.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "gateway[\\/]server\.py|start_daemon\.py" } | ForEach-Object {
+    Get-CimInstance Win32_Process -Filter "Name = 'python.exe' or Name = 'pythonw.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "gateway[\\/]server\.py|start_daemon\.py|service_runner\.py" } | ForEach-Object {
         try {
             Write-Output "Terminating WinMCP Gateway Python (PID: $($_.ProcessId))..."
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue

@@ -1242,9 +1242,17 @@ def api_domain_update():
 @app.route("/api/server/restart", methods=["POST"])
 def api_server_restart():
     def restart_worker():
-        time.sleep(1)
+        time.sleep(0.5)
+        try:
+            if BACKEND and BACKEND.proc:
+                BACKEND.proc.terminate()
+        except Exception:
+            pass
+        # Spawn detached restart if not running as Windows Service
         run_winmcp = os.path.join(PROJECT_DIR, "run_winmcp.ps1")
         run_silent(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", run_winmcp])
+        time.sleep(0.5)
+        os._exit(0)
     
     threading.Thread(target=restart_worker, daemon=True).start()
     return jsonify({"status": "restarting"})
@@ -1252,9 +1260,13 @@ def api_server_restart():
 @app.route("/api/server/stop", methods=["POST"])
 def api_server_stop():
     def stop_worker():
-        time.sleep(1)
-        stop_winmcp = os.path.join(PROJECT_DIR, "stop_winmcp.ps1")
-        run_silent(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", stop_winmcp])
+        time.sleep(0.5)
+        try:
+            if BACKEND and BACKEND.proc:
+                BACKEND.proc.terminate()
+        except Exception:
+            pass
+        os._exit(0)
     
     threading.Thread(target=stop_worker, daemon=True).start()
     return jsonify({"status": "stopping"})
