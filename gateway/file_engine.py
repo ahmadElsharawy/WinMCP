@@ -22,9 +22,25 @@ for p in user_packages:
 
 
 def resolve_file_path(raw_path: str) -> str:
-    """Expands environment variables, user homes, and searches default folders if relative."""
+    """Expands environment variables, user homes, active folders, and searches default folders if relative."""
     if not raw_path:
         return ""
+
+    # First attempt smart contextual resolution (open folders, open docs, recent files)
+    try:
+        from gateway.context_engine import smart_resolve_resource
+        smart = smart_resolve_resource(raw_path)
+        if smart and os.path.exists(smart):
+            return smart
+    except Exception:
+        try:
+            import context_engine
+            smart = context_engine.smart_resolve_resource(raw_path)
+            if smart and os.path.exists(smart):
+                return smart
+        except Exception:
+            pass
+
     expanded = os.path.expandvars(os.path.expanduser(str(raw_path).strip()))
     if os.path.isabs(expanded):
         return os.path.normpath(expanded)
