@@ -33,25 +33,33 @@ if ($ready) {
     Write-Warning "Gateway took longer than expected to initialize. Check logs/gateway.log"
 }
 
-# 4. Wait for Cloudflare Tunnel URL to appear
-$tunnelUrl = $null
-for ($i = 0; $i -lt 15; $i++) {
-    Start-Sleep -Seconds 1
-    $cfErr = "$logDir\cloudflared_error.log"
-    if (Test-Path $cfErr) {
-        $content = Get-Content $cfErr -ErrorAction SilentlyContinue
-        foreach ($line in $content) {
-            if ($line -match "(https://[a-zA-Z0-9-]+\.trycloudflare\.com)") {
-                $tunnelUrl = $Matches[1]
-                break
-            }
-        }
-    }
-    if ($tunnelUrl) { break }
+# 4. Wait for Cloudflare Tunnel URL if using Quick Tunnel
+$isCustom = $false
+$envFile = "$scriptDir\.env"
+if (Test-Path $envFile) {
+    $modeLine = Get-Content $envFile -ErrorAction SilentlyContinue | Where-Object { $_ -match "^WINMCP_TUNNEL_MODE=Custom" }
+    if ($modeLine) { $isCustom = $true }
 }
 
-if ($tunnelUrl) {
-    Write-Output "Cloudflare Tunnel URL: $tunnelUrl"
+if (-not $isCustom) {
+    $tunnelUrl = $null
+    for ($i = 0; $i -lt 15; $i++) {
+        Start-Sleep -Seconds 1
+        $cfErr = "$logDir\cloudflared_error.log"
+        if (Test-Path $cfErr) {
+            $content = Get-Content $cfErr -ErrorAction SilentlyContinue
+            foreach ($line in $content) {
+                if ($line -match "(https://[a-zA-Z0-9-]+\.trycloudflare\.com)") {
+                    $tunnelUrl = $Matches[1]
+                    break
+                }
+            }
+        }
+        if ($tunnelUrl) { break }
+    }
+    if ($tunnelUrl) {
+        Write-Output "Cloudflare Tunnel URL: $tunnelUrl"
+    }
 }
 
 Write-Output "WinMCP started successfully."

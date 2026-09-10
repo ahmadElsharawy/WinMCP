@@ -21,7 +21,7 @@ param(
     [switch]$NonInteractive
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 $scriptDir = $PSScriptRoot
 if (-not $scriptDir) { $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
@@ -92,11 +92,11 @@ if (-not $TunnelMode) {
     } else {
         Write-Host "Choose your Cloudflare tunnel mode:" -ForegroundColor White
         Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
-        Write-Host " [1] Cloudflare Quick Tunnel (Free, automatic *.trycloudflare.com URL)" -ForegroundColor Green
+        Write-Host " [1] Cloudflare Quick Tunnel (Free, automatic *.trycloudflare.com URL) [Default]" -ForegroundColor Green
         Write-Host "     * Instant setup without requiring a Cloudflare account or domain."
         Write-Host "     * Generates a temporary encrypted HTTPS tunnel URL."
         Write-Host ""
-        Write-Host " [2] Custom Domain (Permanent, stable 24/7 URL) [Recommended]" -ForegroundColor Magenta
+        Write-Host " [2] Custom Domain (Permanent, stable 24/7 URL)" -ForegroundColor Magenta
         Write-Host "     * If you have a domain managed on Cloudflare."
         Write-Host "     * Requires your domain name and Cloudflare Tunnel Token."
         Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
@@ -195,14 +195,16 @@ if (-not $pythonCmd) {
 Print-Success "Python detected: $($pythonCmd.Source)"
 
 # Ensure Flask and Requests are installed
+$pkgsInstalled = $false
 try {
-    & python -c "import flask, requests" 2>$null
-    Print-Success "Required packages (Flask, Requests) are installed."
-} catch {
-    Write-Host "Installing required packages..." -ForegroundColor Yellow
+    $out = & python -c "import flask, requests; print('OK')" 2>$null
+    if ($out -match "OK") { $pkgsInstalled = $true }
+} catch {}
+if (-not $pkgsInstalled) {
+    Write-Host "Installing required packages (Flask, Requests)..." -ForegroundColor Yellow
     & python -m pip install flask requests --quiet
-    Print-Success "Packages installed successfully."
 }
+Print-Success "Required packages (Flask, Requests) are installed."
 
 # --- Step 4: Download windows-mcp-server binary ---
 Print-Step "Verifying official engine binary (windows-mcp-server)"
@@ -255,34 +257,12 @@ if (Test-Path $envFile) {
 }
 
 if ($token) {
-    Write-Host "Existing security token detected: $($token.Substring(0, 8))...$($token.Substring($token.Length - 6))" -ForegroundColor Gray
-    $changeT = Read-Host "Keep existing token or generate new? [Press Enter to keep / Type 'c' to change]"
-    if ($changeT.ToLower() -eq "c") {
-        $token = ""
-    } else {
-        Print-Success "Existing token preserved."
-    }
-}
-
-if (-not $token) {
-    Write-Host "`nChoose Bearer authentication token creation method:" -ForegroundColor White
-    Write-Host " [1] Generate cryptographically secure random token (256-bit Random - Recommended)" -ForegroundColor Green
-    Write-Host " [2] Enter a custom secret token of my choice" -ForegroundColor Magenta
-    
-    $tokenChoice = Read-Host "Enter choice [1 or 2] (Default: 1)"
-    if ($tokenChoice -eq "2") {
-        while (-not $token) {
-            $token = Read-Host "Enter your custom secret token"
-            $token = $token.Trim()
-            if (-not $token) { Write-Host "Token cannot be empty!" -ForegroundColor Yellow }
-        }
-        Print-Success "Custom token set successfully."
-    } else {
-        $bytes = New-Object byte[] 32
-        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-        $token = -join ($bytes | ForEach-Object { "{0:x2}" -f $_ })
-        Print-Success "Generated secure random 256-bit Bearer token."
-    }
+    Print-Success "Existing security token preserved ($($token.Substring(0, 8))...$($token.Substring($token.Length - 6)))."
+} else {
+    $bytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $token = -join ($bytes | ForEach-Object { "{0:x2}" -f $_ })
+    Print-Success "Generated secure random 256-bit Bearer token."
 }
 
 # Write .env configuration
@@ -311,10 +291,10 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 0)
 
 try {
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts Windows MCP Server on user logon" -Force | Out-Null
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts Windows MCP Server on user logon" -Force -ErrorAction Stop | Out-Null
     Print-Success "Task registered in Windows Task Scheduler ($taskName)"
 } catch {
-    Print-Warning "Task Scheduler notice: $($_.Exception.Message)"
+    # Non-elevated user: Task Scheduler requires admin; Startup folder below handles auto-start seamlessly
 }
 
 # 2. Windows Startup Folder (shell:startup)
@@ -382,10 +362,8 @@ Write-Host "`nBearer Authentication Token:" -ForegroundColor Cyan
 Write-Host "  $token" -ForegroundColor White
 
 Write-Host "`n----------------------------------------------------------------------" -ForegroundColor DarkCyan
-Write-Host "Interactive Web Control Center Dashboard:" -ForegroundColor Green
-Write-Host "  Local URL  : http://127.0.0.1:8765/dashboard" -ForegroundColor White
-Write-Host "  Remote URL : $finalPublicUrl/dashboard?token=$token" -ForegroundColor White
-Write-Host "  Launcher   : Double-click dashboard.bat or run 'winmcp dashboard'" -ForegroundColor DarkYellow
+Write-Host "Interactive CMD Control Center Dashboard:" -ForegroundColor Green
+Write-Host "  Launch anytime by running 'winmcp' or double-clicking 'winmcp.bat'" -ForegroundColor Yellow
 
 Write-Host "`n----------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host "1. How to connect with Claude Web (claude.ai):" -ForegroundColor White
@@ -414,13 +392,20 @@ Write-Host @"
 "@ -ForegroundColor DarkYellow
 
 Write-Host "`nUseful CLI Commands (run anytime in terminal):" -ForegroundColor Cyan
-Write-Host "  winmcp dashboard - Open visual control center in browser"
-Write-Host "  winmcp status    - Show dashboard and public URL"
+Write-Host "  winmcp           - Open Interactive CMD Dashboard"
+Write-Host "  winmcp status    - Show status summary and public URL"
 Write-Host "  winmcp stop      - Stop all WinMCP processes"
 Write-Host "  winmcp start     - Launch server and tunnel"
 Write-Host "  winmcp restart   - Restart server and refresh tunnel"
-Write-Host "  winmcp domain    - Change or link custom domain"
 Write-Host "  winmcp token     - View, rotate, or set custom token"
-Write-Host "  winmcp logs      - Stream real-time audit logs"
+Write-Host "  winmcp domain    - Switch or link custom domain"
+Write-Host "  winmcp logs      - View recent audit logs"
+Write-Host "  winmcp run       - Interactive MCP tool runner"
 Write-Host "  winmcp uninstall - Completely uninstall and reset from roots"
 Write-Host "======================================================================`n" -ForegroundColor Green
+
+if (-not $NonInteractive) {
+    Write-Host "Press [Enter] to open WinMCP Interactive Dashboard..." -ForegroundColor Cyan
+    Read-Host
+    & "$scriptDir\winmcp.ps1" menu
+}

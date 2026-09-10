@@ -47,34 +47,69 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; .\install.ps1
 
 ---
 
-## 🖥️ 2. Interactive Web Control Center Dashboard
+## 🖥️ 2. Interactive Control Center Dashboard (CMD & Terminal)
 
-Control your entire WinMCP server visually with buttons and mouse from a rich, glassmorphic dark-mode web dashboard — no coding or terminal commands required!
+Manage and control every single aspect of your WinMCP server directly from an interactive CMD / PowerShell terminal dashboard — with full control modeled after CTRLMCP:
 
 ### Launching the Dashboard:
-- **Easiest (Desktop - Zero CMD Window)**: Double-click **`dashboard.bat`** or **`dashboard.vbs`** in the project folder.
-- **CLI / PowerShell**: Run `winmcp dashboard` (or `winmcp gui`) from any terminal.
-- **Browser URL**: Open [http://127.0.0.1:8765/dashboard](http://127.0.0.1:8765/dashboard).
+- **From Any CMD / Terminal**: Simply type `winmcp` (or `WINMCP`) and press Enter from any terminal window.
+- **Double-Click**: Double-click **`winmcp.bat`** or **`dashboard.bat`** in the project folder.
+- **Optional Web Dashboard**: If you ever prefer a browser view, run `winmcp web` or open [http://127.0.0.1:8765/dashboard](http://127.0.0.1:8765/dashboard).
 
-### Dashboard Key Features:
-1. **Live Engine Telemetry**: Real-time status monitoring of core binary PID, gateway listener, Cloudflare tunnel state, and background task health.
-2. **AI Connection Hub**:
-   - **Claude Web (One-Link Connection)**: Copy the unified SSE link (`https://<domain>/sse?token=<key>`) and paste directly into Claude Custom Connectors.
-   - **ChatGPT**: Copy the `/mcp` streamable HTTP endpoint and Bearer token with a single click.
-   - **Claude Desktop**: View and copy ready-to-use `claude_desktop_config.json`.
-3. **Interactive Token Management**:
-   - Reveal or mask active security key.
-   - One-click **"Rotate Token"** generates a new 256-bit cryptographic token and updates `.env` instantly.
-   - Set a custom token via the graphical dialog.
-4. **Cloudflare Tunnel & Domain Switcher**:
-   - Switch between free **Quick Tunnel** (`*.trycloudflare.com`) and permanent **Custom Domain** (`winmcp.yourdomain.com`).
-   - Save domain credentials and automatically refresh the tunnel without terminal commands.
-5. **Interactive 37 Tools Explorer & Live Execution**:
-   - Browse all 37 Windows automation tools with instant search.
-   - Filter by risk level (**Read-Only**, **Low**, **Medium**, **High**, **Critical**).
-   - Click **Run** on any tool to execute it live against the Windows host and inspect results in an interactive response modal.
-6. **Real-Time Audit Log Stream**: Live terminal view of all inbound AI interactions, execution latencies, and security classifications.
-7. **Server Management**: Restart or stop server processes with a single click.
+### CMD Dashboard Menu Features:
+```text
+============================================================
+                 WINMCP SERVER INFORMATION                  
+============================================================
+Service Status : ACTIVE (RUNNING)
+Gateway Port   : 8765 (LISTENING)
+Engine Binary  : windows-mcp-server (PID: 364)
+Cloudflare PID : CONNECTED
+Tunnel Mode    : Custom (or Quick)
+Public Endpoint: https://winmcp.yourdomain.com
+Current Token  : <256-bit Token>
+Logon AutoStart: Enabled
+Windows Service: Installed / Running
+
+------------------------------------------------------------
+🔗 DIRECT CONNECTION URLS / روابط الاتصال المباشرة:
+------------------------------------------------------------
+1. Claude Web (claude.ai -> Settings -> Connectors):
+   URL       : https://winmcp.yourdomain.com/sse?token=<Token>
+   Transport : Server-Sent Events (SSE)
+
+2. ChatGPT (Desktop MCP / Custom GPTs):
+   Direct URL: https://winmcp.yourdomain.com/mcp
+   Bearer    : Bearer <Token>
+
+3. Claude Desktop Config (claude_desktop_config.json):
+{
+  "mcpServers": {
+    "windows": {
+      "command": "C:\\path\\to\\WinMCP\\bin\\windows-mcp-server.exe",
+      "args": ["stdio", "--toolsets", "all"]
+    }
+  }
+}
+============================================================
+
+MANAGEMENT & CONTROL OPTIONS / خيارات التحكم والإدارة:
+------------------------------------------------------------
+  [1]  🎲 Change Token to Random (تغيير التوكن عشوائياً وفصل القديم)
+  [2]  ✍️  Change Token to Custom (كتابة توكن مخصص من اختيارك)
+  [3]  🔄 Restart WinMCP Server & Tunnel (إعادة تشغيل الخادم والنفق)
+  [4]  🛑 Stop WinMCP Server (إيقاف تشغيل الخادم)
+  [5]  ▶️  Start WinMCP Server (تشغيل الخادم في الخلفية)
+  [6]  🌐 Switch / Set Custom Domain (تغيير أو ربط دومين مخصص)
+  [7]  📜 View Live Audit Logs (عرض سجلات النشاط المباشرة)
+  [8]  🧪 Interactive Tool Runner (تشغيل وتجربة أي أداة مباشرة)
+  [9]  ⚙️  Toggle Logon Auto-Start (تفعيل/تعطيل بدء التشغيل التلقائي)
+  [10] 🚀 Manage Windows Service (تثبيت/إلغاء خدمة ويندوز 24/7)
+  [11] 📋 Refresh Screen (تحديث الشاشة)
+  [12] 🗑️  Clean Uninstall WinMCP (حذف الأداة بالكامل من جذورها)
+  [0]  🚪 Exit (خروج)
+------------------------------------------------------------
+```
 
 ---
 
