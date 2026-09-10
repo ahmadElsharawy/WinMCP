@@ -1,0 +1,285 @@
+{
+  "App": {
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "description": "Operation.",
+        "enum": [
+          "launch",
+          "switch",
+          "resize"
+        ]
+      },
+      "name": {
+        "type": "string",
+        "description": "App name (launch) or window title substring (switch/resize)."
+      },
+      "window_loc": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "description": "Target [x,y] for resize."
+      },
+      "window_size": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "description": "Target [width,height] for resize."
+      }
+    },
+    "required": [
+      "mode"
+    ]
+  },
+  "Click": {
+    "type": "object",
+    "properties": {
+      "automation_id": {
+        "type": "string",
+        "description": "Target an element by its developer-assigned automation id. The most stable identifier: unlike the accessible name it survives translation and relabelling."
+      },
+      "button": {
+        "type": "string",
+        "description": "Mouse button (default left).",
+        "enum": [
+          "left",
+          "right",
+          "middle"
+        ]
+      },
+      "clicks": {
+        "type": "integer",
+        "description": "0 = hover, 1 = single (default), 2 = double."
+      },
+      "control_type": {
+        "type": "string",
+        "description": "Optional control type to disambiguate a 'name' match (e.g. Button, Edit, ListItem, TabItem)."
+      },
+      "label": {
+        "type": "integer",
+        "description": "Interactive element label from the most recent Snapshot."
+      },
+      "loc": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "description": "Explicit screen coordinates [x, y] in physical pixels."
+      },
+      "name": {
+        "type": "string",
+        "description": "Target an element by its accessible name from the most recent Snapshot (alternative to 'label')."
+      },
+      "name_match": {
+        "type": "string",
+        "description": "How 'name' is matched. Default exact \u00e2\u20ac\u201d a substring or regex match must be asked for, so a name never silently widens to another control.",
+        "enum": [
+          "exact",
+          "contains",
+          "matches"
+        ]
+      },
+      "nth": {
+        "type": "integer",
+        "description": "Deprecated alias for occurrence: a 0-based index among multiple matches."
+      },
+      "occurrence": {
+        "type": "string",
+        "description": "What to do when several elements match: 'unique' (default \u00e2\u20ac\u201d ambiguity is an error naming the candidates), 'first', or a 0-based index."
+      }
+    }
+  },
+  "FileSystem": {
+    "type": "object",
+    "properties": {
+      "append": {
+        "type": "boolean",
+        "description": "Append instead of overwrite (write mode)."
+      },
+      "content": {
+        "type": "string",
+        "description": "Content to write (write mode)."
+      },
+      "destination": {
+        "type": "string",
+        "description": "Destination path (copy/move)."
+      },
+      "mode": {
+        "type": "string",
+        "description": "Operation.",
+        "enum": [
+          "read",
+          "write",
+          "copy",
+          "move",
+          "delete",
+          "list",
+          "search",
+          "info"
+        ]
+      },
+      "path": {
+        "type": "string",
+        "description": "Target path (relative to Desktop unless absolute)."
+      },
+      "pattern": {
+        "type": "string",
+        "description": "Glob pattern (search mode), e.g. *.txt."
+      },
+      "recursive": {
+        "type": "boolean",
+        "description": "Recurse into subdirectories (search mode)."
+      }
+    },
+    "required": [
+      "mode",
+      "path"
+    ]
+  },
+  "Invoke": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "description": "The pattern action (default invoke).",
+        "enum": [
+          "invoke",
+          "set_value",
+          "toggle",
+          "select",
+          "expand",
+          "collapse"
+        ]
+      },
+      "automation_id": {
+        "type": "string",
+        "description": "Target an element by its developer-assigned automation id. The most stable identifier: unlike the accessible name it survives translation and relabelling."
+      },
+      "control_type": {
+        "type": "string",
+        "description": "Optional control type to disambiguate a 'name' match (e.g. Button, Edit, ListItem, TabItem)."
+      },
+      "label": {
+        "type": "integer",
+        "description": "Interactive element label from the most recent Snapshot."
+      },
+      "loc": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "description": "Explicit screen coordinates [x, y] in physical pixels."
+      },
+      "name": {
+        "type": "string",
+        "description": "Target an element by its accessible name from the most recent Snapshot (alternative to 'label')."
+      },
+      "name_match": {
+        "type": "string",
+        "description": "How 'name' is matched. Default exact \u00e2\u20ac\u201d a substring or regex match must be asked for, so a name never silently widens to another control.",
+        "enum": [
+          "exact",
+          "contains",
+          "matches"
+        ]
+      },
+      "nth": {
+        "type": "integer",
+        "description": "Deprecated alias for occurrence: a 0-based index among multiple matches."
+      },
+      "occurrence": {
+        "type": "string",
+        "description": "What to do when several elements match: 'unique' (default \u00e2\u20ac\u201d ambiguity is an error naming the candidates), 'first', or a 0-based index."
+      },
+      "value": {
+        "type": "string",
+        "description": "Text to set (required for set_value)."
+      }
+    }
+  },
+  "PowerShell": {
+    "type": "object",
+    "properties": {
+      "command": {
+        "type": "string",
+        "description": "The PowerShell command to execute."
+      },
+      "timeout": {
+        "type": "integer",
+        "description": "Timeout in seconds (default 30, clamped to 1-600)."
+      }
+    },
+    "required": [
+      "command"
+    ]
+  },
+  "Snapshot": {
+    "type": "object",
+    "properties": {
+      "all_windows": {
+        "type": "boolean",
+        "description": "Walk every visible window's UI tree, not just the foreground window (slower)."
+      }
+    }
+  },
+  "Type": {
+    "type": "object",
+    "properties": {
+      "automation_id": {
+        "type": "string",
+        "description": "Target an element by its developer-assigned automation id. The most stable identifier: unlike the accessible name it survives translation and relabelling."
+      },
+      "clear": {
+        "type": "boolean",
+        "description": "Select-all and delete before typing (default false)."
+      },
+      "control_type": {
+        "type": "string",
+        "description": "Optional control type to disambiguate a 'name' match (e.g. Button, Edit, ListItem, TabItem)."
+      },
+      "label": {
+        "type": "integer",
+        "description": "Interactive element label from the most recent Snapshot."
+      },
+      "loc": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "description": "Explicit screen coordinates [x, y] in physical pixels."
+      },
+      "name": {
+        "type": "string",
+        "description": "Target an element by its accessible name from the most recent Snapshot (alternative to 'label')."
+      },
+      "name_match": {
+        "type": "string",
+        "description": "How 'name' is matched. Default exact \u00e2\u20ac\u201d a substring or regex match must be asked for, so a name never silently widens to another control.",
+        "enum": [
+          "exact",
+          "contains",
+          "matches"
+        ]
+      },
+      "nth": {
+        "type": "integer",
+        "description": "Deprecated alias for occurrence: a 0-based index among multiple matches."
+      },
+      "occurrence": {
+        "type": "string",
+        "description": "What to do when several elements match: 'unique' (default \u00e2\u20ac\u201d ambiguity is an error naming the candidates), 'first', or a 0-based index."
+      },
+      "press_enter": {
+        "type": "boolean",
+        "description": "Press Enter after typing (default false)."
+      },
+      "text": {
+        "type": "string",
+        "description": "The text to type."
+      }
+    }
+  }
+}

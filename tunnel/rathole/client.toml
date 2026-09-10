@@ -1,0 +1,10 @@
+# Rathole Client Configuration for Windows MCP Server
+# Connects to your VPS running Rathole Server
+
+[client]
+remote_addr = "YOUR_VPS_IP:2333"
+default_token = "YOUR_RATHOLE_SECRET_TOKEN"
+
+[client.services.winmcp]
+type = "tcp"
+local_addr = "127.0.0.1:8765"

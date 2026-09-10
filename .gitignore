@@ -1,0 +1,21 @@
+# Personal & Secret Configuration
+.env
+evidence.key
+*.key
+
+# Runtime Logs & Diagnostic Data
+logs/
+*.log
+
+# Caches & Temporary Artifacts
+__pycache__/
+*.pyc
+test_scratch/
+*.zip
+*.tmp
+*.bak
+*.exe
+
+# IDE & Editor Configs
+.vscode/
+.idea/
