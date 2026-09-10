@@ -89,17 +89,49 @@ if (-not $Force) {
 
 # --- Step 1: Stop All Running Processes ---
 Print-Step "1. Stopping all active processes"
-$procsToKill = @("windows-mcp-server", "cloudflared", "rathole")
-foreach ($p in $procsToKill) {
-    Get-Process -Name $p -ErrorAction SilentlyContinue | ForEach-Object {
+
+# 1.0 Attempt graceful REST API stop first
+try {
+    $null = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/server/stop" -Method POST -TimeoutSec 1 -ErrorAction SilentlyContinue
+} catch {}
+
+# 1.1 Stop windows-mcp-server
+Get-Process -Name "windows-mcp-server" -ErrorAction SilentlyContinue | ForEach-Object {
+    try {
+        Write-Output "Terminating windows-mcp-server (PID: $($_.Id))..."
         Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
-    }
+    } catch {}
+}
+cmd.exe /c "taskkill /F /IM windows-mcp-server.exe /T > nul 2>&1"
+cmd.exe /c "wmic process where `"name='windows-mcp-server.exe'`" call terminate > nul 2>&1"
+
+# 1.2 Stop cloudflared
+Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | ForEach-Object {
+    try {
+        Write-Output "Terminating cloudflared (PID: $($_.Id))..."
+        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+    } catch {}
+}
+cmd.exe /c "wmic process where `"name='cloudflared.exe' and CommandLine like '%WinMCP%'`" call terminate > nul 2>&1"
+
+# 1.3 Stop rathole
+Get-Process -Name "rathole" -ErrorAction SilentlyContinue | ForEach-Object {
+    try {
+        Write-Output "Terminating rathole (PID: $($_.Id))..."
+        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+    } catch {}
 }
 
-# Stop python processes running server.py
-Get-CimInstance Win32_Process -Filter "Name = 'python.exe' or Name = 'pythonw.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "gateway\\server\.py" } | ForEach-Object {
-    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-}
+# 1.4 Stop python processes running gateway or start_daemon
+try {
+    Get-CimInstance Win32_Process -Filter "Name = 'python.exe' or Name = 'pythonw.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "gateway[\\/]server\.py|start_daemon\.py" } | ForEach-Object {
+        try {
+            Write-Output "Terminating WinMCP Gateway Python (PID: $($_.ProcessId))..."
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            cmd.exe /c "wmic process where `"ProcessId=$($_.ProcessId)`" call terminate > nul 2>&1"
+        } catch {}
+    }
+} catch {}
 Print-Success "All active processes stopped."
 
 # --- Step 2: Uninstall Windows Service (if installed) ---
@@ -110,24 +142,23 @@ if ($svc) {
     if (Test-Path $nssmExe) {
         & "$nssmExe" stop "WinMCP-Service" 2>$null
         & "$nssmExe" remove "WinMCP-Service" confirm 2>$null
-    } else {
-        Stop-Service -Name "WinMCP-Service" -Force -ErrorAction SilentlyContinue
-        sc.exe delete "WinMCP-Service" | Out-Null
     }
+    Stop-Service -Name "WinMCP-Service" -Force -ErrorAction SilentlyContinue
+    sc.exe stop "WinMCP-Service" | Out-Null
+    sc.exe delete "WinMCP-Service" | Out-Null
     Print-Success "Removed WinMCP-Service from Windows Services."
 } else {
+    sc.exe delete "WinMCP-Service" | Out-Null
     Print-Success "WinMCP-Service is not installed."
 }
 
 # --- Step 3: Remove Windows Task Scheduler Task ---
 Print-Step "3. Removing auto-start task from Task Scheduler"
-$task = Get-ScheduledTask -TaskName "WindowsMCPServer" -ErrorAction SilentlyContinue
-if ($task) {
+try {
     Unregister-ScheduledTask -TaskName "WindowsMCPServer" -Confirm:$false -ErrorAction SilentlyContinue
-    Print-Success "Removed scheduled task (WindowsMCPServer)."
-} else {
-    Print-Success "No scheduled task found with this name."
-}
+} catch {}
+cmd.exe /c "schtasks.exe /Delete /TN `"WindowsMCPServer`" /F > nul 2>&1"
+Print-Success "Cleaned Task Scheduler registration (WindowsMCPServer)."
 
 # --- Step 4: Remove Silent Launcher from Windows Startup Folder ---
 Print-Step "4. Removing launcher from Windows Startup folder"
@@ -140,8 +171,8 @@ if (Test-Path $vbsPath) {
     Print-Success "No launcher found in Startup folder."
 }
 
-# --- Step 5: Clean Project Directory from User PATH ---
-Print-Step "5. Cleaning project directory from User PATH environment variable"
+# --- Step 5: Clean All WinMCP Entries from User PATH ---
+Print-Step "5. Cleaning all WinMCP entries from User PATH environment variable"
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath) {
     $cleanPathElements = @()
@@ -149,7 +180,7 @@ if ($userPath) {
     foreach ($entry in $userPath.Split(";")) {
         $trimmed = $entry.Trim()
         if ($trimmed) {
-            if ($trimmed.TrimEnd("\") -eq $scriptDir.TrimEnd("\")) {
+            if ($trimmed -match "WinMCP") {
                 $modified = $true
             } else {
                 $cleanPathElements += $trimmed
@@ -159,14 +190,17 @@ if ($userPath) {
     if ($modified) {
         $newUserPath = $cleanPathElements -join ";"
         [Environment]::SetEnvironmentVariable("Path", $newUserPath, "User")
-        Print-Success "Removed project directory from User PATH."
+        Print-Success "Purged all WinMCP directories from User PATH."
     } else {
-        Print-Success "Project directory was not in User PATH."
+        Print-Success "User PATH is clean of WinMCP entries."
     }
 }
 
 # --- Step 6: Delete Runtime Configurations, Logs, and Caches ---
 Print-Step "6. Purging configuration (.env), logs, and temporary caches"
+# Strip read-only/hidden attributes recursively so Windows can delete everything cleanly
+cmd.exe /c "attrib -r -s -h `"$scriptDir\*`" /s /d > nul 2>&1"
+
 $envFile = "$scriptDir\.env"
 if (Test-Path $envFile) {
     Remove-Item -Path $envFile -Force -ErrorAction SilentlyContinue
@@ -185,6 +219,9 @@ Get-ChildItem -Path $scriptDir -Filter "__pycache__" -Recurse -Directory -ErrorA
 $scratchDir = "$scriptDir\test_scratch"
 if (Test-Path $scratchDir) { Remove-Item -Path $scratchDir -Recurse -Force -ErrorAction SilentlyContinue }
 
+# Remove temporary files
+Get-ChildItem -Path $scriptDir -Include "*.tmp","*.bak","*.zip" -Recurse -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+
 Print-Success "Purged all caches and temporary files."
 
 # --- Step 7: Handle Full Purge or Reset Complete ---
@@ -194,7 +231,7 @@ if ($deleteMode -eq 2) {
     Write-Host "======================================================================" -ForegroundColor Green
     Write-Host "`nClosing window and permanently deleting: $scriptDir..." -ForegroundColor Yellow
     Start-Sleep -Seconds 2
-    $cmd = "ping 127.0.0.1 -n 3 > nul & rmdir /s /q `"$scriptDir`""
+    $cmd = "ping 127.0.0.1 -n 3 > nul & attrib -r -s -h `"$scriptDir\*`" /s /d > nul 2>&1 & rmdir /s /q `"$scriptDir`""
     Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd" -WindowStyle Hidden
     exit 0
 } else {

@@ -1,23 +1,31 @@
 # WinMCP Cleanup / Stopper Script
 Write-Output "Stopping WinMCP processes..."
 
-# Stop windows-mcp-server
+# 0. Graceful API shutdown if gateway is alive
+try {
+    $null = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/server/stop" -Method POST -TimeoutSec 1 -ErrorAction SilentlyContinue
+} catch {}
+
+# 1. Stop windows-mcp-server
 Get-Process -Name "windows-mcp-server" -ErrorAction SilentlyContinue | ForEach-Object {
     try {
         Write-Output "Terminating windows-mcp-server (PID: $($_.Id))..."
         Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
     } catch {}
 }
+cmd.exe /c "taskkill /F /IM windows-mcp-server.exe /T > nul 2>&1"
+cmd.exe /c "wmic process where `"name='windows-mcp-server.exe'`" call terminate > nul 2>&1"
 
-# Stop cloudflared
+# 2. Stop cloudflared
 Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | ForEach-Object {
     try {
         Write-Output "Terminating cloudflared (PID: $($_.Id))..."
         Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
     } catch {}
 }
+cmd.exe /c "wmic process where `"name='cloudflared.exe' and CommandLine like '%WinMCP%'`" call terminate > nul 2>&1"
 
-# Stop rathole
+# 3. Stop rathole
 Get-Process -Name "rathole" -ErrorAction SilentlyContinue | ForEach-Object {
     try {
         Write-Output "Terminating rathole (PID: $($_.Id))..."
@@ -25,12 +33,13 @@ Get-Process -Name "rathole" -ErrorAction SilentlyContinue | ForEach-Object {
     } catch {}
 }
 
-# Stop python processes running server.py
+# 4. Stop python processes running gateway/server.py or start_daemon.py
 try {
     Get-CimInstance Win32_Process -Filter "Name = 'python.exe' or Name = 'pythonw.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "gateway[\\/]server\.py|start_daemon\.py" } | ForEach-Object {
         try {
             Write-Output "Terminating WinMCP Gateway Python (PID: $($_.ProcessId))..."
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            cmd.exe /c "wmic process where `"ProcessId=$($_.ProcessId)`" call terminate > nul 2>&1"
         } catch {}
     }
 } catch {}

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     WinMCP - Windows MCP Server Interactive Control Center & CLI
 .DESCRIPTION
@@ -150,7 +150,7 @@ function Show-Info {
     }
 
     Write-Host "`n------------------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host " DIRECT CONNECTION URLS / روابط الاتصال المباشرة:" -ForegroundColor Yellow
+    Write-Host " DIRECT CONNECTION URLS:" -ForegroundColor Yellow
     Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
 
     if ($tunnelUrl) {
@@ -426,7 +426,7 @@ function Manage-ServiceMenu {
 function Set-Domain {
     param([string]$DomainName)
     Write-Host "`n============================================================" -ForegroundColor Cyan
-    Write-Host "                 CLOUDFLARE TUNNEL & DOMAIN                 " -ForegroundColor White
+    Write-Host "                CLOUDFLARE TUNNEL AND DOMAIN                " -ForegroundColor White
     Write-Host "============================================================" -ForegroundColor Cyan
     Write-Host " [1] Free Cloudflare Quick Tunnel (Automatic *.trycloudflare.com)" -ForegroundColor Green
     Write-Host " [2] Custom Domain (Fixed permanent URL e.g. winmcp.yourdomain.com)" -ForegroundColor Magenta
@@ -479,13 +479,19 @@ function Clean-WinMCP {
     Stop-WinMCP
     if (Test-Path $logDir) {
         Get-ChildItem "$logDir\*.log" -ErrorAction SilentlyContinue | ForEach-Object {
-            Clear-Content -Path $_.FullName -Force
+            Clear-Content -Path $_.FullName -Force -ErrorAction SilentlyContinue
         }
     }
     Get-ChildItem -Path $scriptDir -Filter "__pycache__" -Recurse -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
     }
-    Write-Host "[OK] Cleaned logs and temporary files." -ForegroundColor Green
+    $scratch = "$scriptDir\test_scratch"
+    if (Test-Path $scratch) { Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue }
+    Get-ChildItem -Path $scriptDir -Include "*.tmp","*.bak" -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
+        Remove-Item -Path $_.FullName -Force -ErrorAction SilentlyContinue
+    }
+    cmd.exe /c "attrib -r -s -h `"$scriptDir\*`" /s /d > nul 2>&1"
+    Write-Host "[OK] Cleaned logs, temporary files, and caches." -ForegroundColor Green
 }
 
 function Uninstall-WinMCP {
@@ -503,21 +509,21 @@ function Interactive-Menu {
         Clear-Host
         Show-Info
         Write-Host ""
-        Write-Host "MANAGEMENT & CONTROL OPTIONS / خيارات التحكم والإدارة:" -ForegroundColor Yellow
+        Write-Host "MANAGEMENT AND CONTROL OPTIONS:" -ForegroundColor Yellow
         Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
-        Write-Host "  [1]  🎲 Change Token to Random (تغيير التوكن عشوائياً وفصل القديم)" -ForegroundColor White
-        Write-Host "  [2]  ✍️  Change Token to Custom (كتابة توكن مخصص من اختيارك)" -ForegroundColor White
-        Write-Host "  [3]  🔄 Restart WinMCP Server & Tunnel (إعادة تشغيل الخادم والنفق)" -ForegroundColor White
-        Write-Host "  [4]  🛑 Stop WinMCP Server (إيقاف تشغيل الخادم)" -ForegroundColor White
-        Write-Host "  [5]  ▶️  Start WinMCP Server (تشغيل الخادم في الخلفية)" -ForegroundColor White
-        Write-Host "  [6]  🌐 Switch / Set Custom Domain (تغيير أو ربط دومين مخصص)" -ForegroundColor White
-        Write-Host "  [7]  📜 View Live Audit Logs (عرض سجلات النشاط المباشرة)" -ForegroundColor White
-        Write-Host "  [8]  🧪 Interactive Tool Runner (تشغيل وتجربة أي أداة مباشرة)" -ForegroundColor White
-        Write-Host "  [9]  ⚙️  Toggle Logon Auto-Start (تفعيل/تعطيل بدء التشغيل التلقائي)" -ForegroundColor White
-        Write-Host "  [10] 🚀 Manage Windows Service (تثبيت/إلغاء خدمة ويندوز 24/7)" -ForegroundColor White
-        Write-Host "  [11] 📋 Refresh Screen (تحديث الشاشة)" -ForegroundColor White
-        Write-Host "  [12] 🗑️  Clean Uninstall WinMCP (حذف الأداة بالكامل من جذورها)" -ForegroundColor White
-        Write-Host "  [0]  🚪 Exit (خروج)" -ForegroundColor Red
+        Write-Host "  [1]  Rotate Token to Random (Generate new 256-bit key)" -ForegroundColor White
+        Write-Host "  [2]  Set Custom Token (Specify custom security key)" -ForegroundColor White
+        Write-Host "  [3]  Restart WinMCP Server and Tunnel" -ForegroundColor White
+        Write-Host "  [4]  Stop WinMCP Server" -ForegroundColor White
+        Write-Host "  [5]  Start WinMCP Server in background" -ForegroundColor White
+        Write-Host "  [6]  Switch or Set Custom Domain (Cloudflare Tunnel)" -ForegroundColor White
+        Write-Host "  [7]  View Live Audit Logs" -ForegroundColor White
+        Write-Host "  [8]  Interactive Tool Runner (Execute any of 37 tools)" -ForegroundColor White
+        Write-Host "  [9]  Toggle Logon Auto-Start" -ForegroundColor White
+        Write-Host "  [10] Manage Windows Service (24/7 background mode)" -ForegroundColor White
+        Write-Host "  [11] Refresh Screen" -ForegroundColor White
+        Write-Host "  [12] Clean Uninstall WinMCP (Full purge or reset)" -ForegroundColor White
+        Write-Host "  [0]  Exit" -ForegroundColor Red
         Write-Host "------------------------------------------------------------" -ForegroundColor DarkCyan
 
         $choice = Read-Host "Choose an option [0-12]"
@@ -526,7 +532,7 @@ function Interactive-Menu {
         switch ($choice) {
             "1" {
                 Write-Host "`nGenerating cryptographically secure 256-bit token..." -ForegroundColor Cyan
-                $bytes = New-Object byte[] 32
+                $bytes = [byte[]]::new(32)
                 [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
                 $newToken = -join ($bytes | ForEach-Object { "{0:x2}" -f $_ })
                 Update-EnvToken -NewToken $newToken
