@@ -20,6 +20,9 @@ import secrets
 import struct
 import zlib
 import base64
+import tempfile
+import ctypes
+from ctypes import wintypes
 from typing import Dict, Any, Optional
 from urllib.parse import parse_qs, urlparse
 import glob
@@ -175,13 +178,207 @@ def run_powershell(script: str, timeout: int = 20) -> tuple:
 
 def get_screen_resolution() -> tuple:
     try:
-        import ctypes
-        user32 = ctypes.windll.user32
-        w = user32.GetSystemMetrics(0) or 1536
-        h = user32.GetSystemMetrics(1) or 864
-        return w, h
+        if sys.platform == "win32":
+            u = ctypes.windll.user32
+            try:
+                u.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+            except Exception:
+                try:
+                    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+                except Exception:
+                    try:
+                        u.SetProcessDPIAware()
+                    except Exception:
+                        pass
+            w = u.GetSystemMetrics(78) or u.GetSystemMetrics(0) or 1920
+            h = u.GetSystemMetrics(79) or u.GetSystemMetrics(1) or 1080
+            return w, h
+        return 1920, 1080
     except Exception:
-        return 1536, 864
+        return 1920, 1080
+
+def capture_native_screenshot() -> Optional[tuple]:
+    """
+    Captures the entire virtual desktop (all monitors) at 100% physical resolution
+    with full Per-Monitor DPI awareness using native Win32 GDI & GDI+ APIs.
+    Returns (base64_png_str, width, height) or None on failure.
+    """
+    if sys.platform != "win32":
+        return None
+
+    try:
+        u = ctypes.windll.user32
+        g = ctypes.windll.gdi32
+        gp = ctypes.windll.gdiplus
+
+        # Enable Per-Monitor DPI Awareness V2 so Windows reports real physical pixels
+        try:
+            u.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+        except Exception:
+            try:
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            except Exception:
+                try:
+                    u.SetProcessDPIAware()
+                except Exception:
+                    pass
+
+        # If running from a service or detached thread desktop, attach to interactive default desktop
+        hdesk = None
+        try:
+            hdesk = u.OpenDesktopW("default", 0, False, 0x10000000)
+            if hdesk:
+                u.SetThreadDesktop(hdesk)
+        except Exception:
+            pass
+
+        # Query virtual screen bounding box (covers all connected monitors)
+        x = u.GetSystemMetrics(76)  # SM_XVIRTUALSCREEN
+        y = u.GetSystemMetrics(77)  # SM_YVIRTUALSCREEN
+        w = u.GetSystemMetrics(78)  # SM_CXVIRTUALSCREEN
+        h = u.GetSystemMetrics(79)  # SM_CYVIRTUALSCREEN
+        if w <= 0 or h <= 0:
+            w = u.GetSystemMetrics(0) or 1920
+            h = u.GetSystemMetrics(1) or 1080
+            x, y = 0, 0
+
+        sdc = u.GetDC(0)
+        if not sdc:
+            if hdesk:
+                try:
+                    u.CloseDesktop(hdesk)
+                except Exception:
+                    pass
+            return None
+
+        mdc = g.CreateCompatibleDC(sdc)
+        if not mdc:
+            u.ReleaseDC(0, sdc)
+            if hdesk:
+                try:
+                    u.CloseDesktop(hdesk)
+                except Exception:
+                    pass
+            return None
+
+        bmp = g.CreateCompatibleBitmap(sdc, w, h)
+        if not bmp:
+            g.DeleteDC(mdc)
+            u.ReleaseDC(0, sdc)
+            if hdesk:
+                try:
+                    u.CloseDesktop(hdesk)
+                except Exception:
+                    pass
+            return None
+
+        old = g.SelectObject(mdc, bmp)
+        # Capture layered and standard windows (SRCCOPY | CAPTUREBLT = 0x40CC0020)
+        res = g.BitBlt(mdc, 0, 0, w, h, sdc, x, y, 0x40CC0020)
+        if not res:
+            res = g.BitBlt(mdc, 0, 0, w, h, sdc, x, y, 0x00CC0020)
+
+        if not res:
+            g.SelectObject(mdc, old)
+            g.DeleteObject(bmp)
+            g.DeleteDC(mdc)
+            u.ReleaseDC(0, sdc)
+            if hdesk:
+                try:
+                    u.CloseDesktop(hdesk)
+                except Exception:
+                    pass
+            return None
+
+        # Initialize GDI+
+        class GdiplusStartupInput(ctypes.Structure):
+            _fields_ = [
+                ("GdiplusVersion", wintypes.DWORD),
+                ("DebugEventCallback", ctypes.c_void_p),
+                ("SuppressBackgroundThread", wintypes.BOOL),
+                ("SuppressExternalCodecs", wintypes.BOOL),
+            ]
+
+        gpi = GdiplusStartupInput(1, None, False, False)
+        token = ctypes.c_void_p()
+        if gp.GdiplusStartup(ctypes.byref(token), ctypes.byref(gpi), None) != 0:
+            g.SelectObject(mdc, old)
+            g.DeleteObject(bmp)
+            g.DeleteDC(mdc)
+            u.ReleaseDC(0, sdc)
+            if hdesk:
+                try:
+                    u.CloseDesktop(hdesk)
+                except Exception:
+                    pass
+            return None
+
+        p_gp_bmp = ctypes.c_void_p()
+        if gp.GdipCreateBitmapFromHBITMAP(bmp, None, ctypes.byref(p_gp_bmp)) != 0:
+            gp.GdiplusShutdown(token)
+            g.SelectObject(mdc, old)
+            g.DeleteObject(bmp)
+            g.DeleteDC(mdc)
+            u.ReleaseDC(0, sdc)
+            if hdesk:
+                try:
+                    u.CloseDesktop(hdesk)
+                except Exception:
+                    pass
+            return None
+
+        # PNG CLSID: {557cf406-1a04-11d3-9a73-0000f81ef32e}
+        class GUID(ctypes.Structure):
+            _fields_ = [
+                ("Data1", wintypes.DWORD),
+                ("Data2", wintypes.WORD),
+                ("Data3", wintypes.WORD),
+                ("Data4", ctypes.c_byte * 8),
+            ]
+
+        png_guid = GUID(
+            0x557CF406,
+            0x1A04,
+            0x11D3,
+            (ctypes.c_byte * 8)(0x9A, 0x73, 0x00, 0x00, 0xF8, 0x1E, 0xF3, 0x2E),
+        )
+
+        fd, tmp_path = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        try:
+            save_st = gp.GdipSaveImageToFile(p_gp_bmp, ctypes.c_wchar_p(tmp_path), ctypes.byref(png_guid), None)
+            if save_st == 0 and os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+                with open(tmp_path, "rb") as f:
+                    raw_png = f.read()
+                b64 = base64.b64encode(raw_png).decode("ascii")
+                return b64, w, h
+        finally:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+            try:
+                gp.GdipDisposeImage(p_gp_bmp)
+            except Exception:
+                pass
+            try:
+                gp.GdiplusShutdown(token)
+            except Exception:
+                pass
+            g.SelectObject(mdc, old)
+            g.DeleteObject(bmp)
+            g.DeleteDC(mdc)
+            u.ReleaseDC(0, sdc)
+            if hdesk:
+                try:
+                    u.CloseDesktop(hdesk)
+                except Exception:
+                    pass
+    except Exception as e:
+        sys.stderr.write(f"Native screenshot error: {e}\n")
+
+    return None
 
 def generate_virtual_display_png(width: int = 1536, height: int = 864) -> str:
     """Generates a lightweight valid PNG image in pure Python and returns base64 string."""
@@ -453,6 +650,30 @@ class WindowsMCPBackend:
                 }
 
     def _dispatch_screenshot(self, req_id: Any) -> Dict[str, Any]:
+        # 1. High-speed, DPI-aware full-screen virtual desktop capture (native Win32 GDI/GDI+)
+        native_res = capture_native_screenshot()
+        if native_res:
+            b64_png, w, h = native_res
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "content": [
+                        {
+                            "type": "image",
+                            "data": b64_png,
+                            "mimeType": "image/png"
+                        },
+                        {
+                            "type": "text",
+                            "text": f"Virtual desktop screenshot ({w}x{h} physical pixels, full-screen DPI-aware capture)."
+                        }
+                    ],
+                    "isError": False
+                }
+            }
+
+        # 2. Secondary fallback: windows-mcp-server Go backend
         resp = self._raw_dispatch({
             "jsonrpc": "2.0",
             "id": req_id,
@@ -464,7 +685,7 @@ class WindowsMCPBackend:
             if any(c.get("type") == "image" for c in content):
                 return resp
 
-        # Fallback when GDI BitBlt fails (headless/disconnected RDP)
+        # 3. Final fallback when desktop DC is completely detached (Session 0 isolated headless)
         w, h = get_screen_resolution()
         b64_png = generate_virtual_display_png(w, h)
         return {
