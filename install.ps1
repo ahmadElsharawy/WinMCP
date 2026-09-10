@@ -244,7 +244,7 @@ if (-not (Test-Path $nssmExe)) {
 Print-Success "أداة nssm جاهزة: $nssmExe"
 
 # --- Step 6: Configure Environment & Tokens ---
-Print-Step "تأمين الاتصال وتوليد مفتاح الأمان (256-bit Bearer Token)"
+Print-Step "تأمين الاتصال وإعداد مفتاح الأمان (Bearer Token)"
 $envFile = "$scriptDir\.env"
 $token = ""
 
@@ -252,15 +252,38 @@ if (Test-Path $envFile) {
     $existing = Get-Content $envFile | Where-Object { $_ -match "^WINMCP_AUTH_TOKEN=" }
     if ($existing) {
         $token = $existing.Split("=", 2)[1].Trim()
-        Print-Success "تم استخدام المفتاح السري الحالي من ملف .env"
+    }
+}
+
+if ($token) {
+    Write-Host "تم العثور على مفتاح أمان موجود مسبقاً: $($token.Substring(0, 8))...$($token.Substring($token.Length - 6))" -ForegroundColor Gray
+    $changeT = Read-Host "هل تريد الاحتفاظ بالمفتاح الحالي أم تغييره؟ [اضغط Enter للاحتفاظ / اكتب 'c' للتغيير]"
+    if ($changeT.ToLower() -eq "c") {
+        $token = ""
+    } else {
+        Print-Success "تم اعتماد المفتاح الحالي."
     }
 }
 
 if (-not $token) {
-    $bytes = New-Object byte[] 32
-    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    $token = -join ($bytes | ForEach-Object { "{0:x2}" -f $_ })
-    Print-Success "تم إنشاء مفتاح أمان عشوائي فائق التشفير."
+    Write-Host "`nاختر طريقة إنشاء مفتاح الأمان (Token):" -ForegroundColor White
+    Write-Host " [1] توليد مفتاح عشوائي فائق التشفير (موصى به - 256-bit Random)" -ForegroundColor Green
+    Write-Host " [2] كتابة مفتاح أمان مخصص من اختياري (Custom Token)" -ForegroundColor Magenta
+    
+    $tokenChoice = Read-Host "أدخل اختيارك [1 أو 2] (الافتراضي 1)"
+    if ($tokenChoice -eq "2") {
+        while (-not $token) {
+            $token = Read-Host "أدخل مفتاح الأمان المخصص الخاص بك"
+            $token = $token.Trim()
+            if (-not $token) { Write-Host "لا يمكن ترك المفتاح فارغاً!" -ForegroundColor Yellow }
+        }
+        Print-Success "تم تعيين المفتاح المخصص بنجاح."
+    } else {
+        $bytes = New-Object byte[] 32
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $token = -join ($bytes | ForEach-Object { "{0:x2}" -f $_ })
+        Print-Success "تم إنشاء مفتاح أمان عشوائي فائق التشفير بنجاح."
+    }
 }
 
 # Write .env configuration

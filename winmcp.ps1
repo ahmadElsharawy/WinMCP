@@ -10,7 +10,10 @@ param(
     [string]$Command = "status",
 
     [Parameter(Position=1)]
-    [string]$SubCommand = ""
+    [string]$SubCommand = "",
+
+    [Parameter(Position=2)]
+    [string]$Value = ""
 )
 
 # Portable Path Detection
@@ -243,15 +246,150 @@ function Show-Logs {
     }
 }
 
-function Show-Token {
+function Generate-RandomToken {
+    $bytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    return -join ($bytes | ForEach-Object { "{0:x2}" -f $_ })
+}
+
+function Manage-Token {
+    param(
+        [string]$SubAction,
+        [string]$CustomValue
+    )
+    
     $token = [Environment]::GetEnvironmentVariable("WINMCP_AUTH_TOKEN", "Process")
-    if ($token) {
-        Write-Host "`nYour Secret Bearer Token:" -ForegroundColor Cyan
-        Write-Host $token -ForegroundColor Yellow
-        Write-Host "`nFor ChatGPT: Authorization: Bearer $token" -ForegroundColor White
-        Write-Host "For Claude Web: Append '?token=$token' to the URL`n" -ForegroundColor White
+    
+    # If called with 'winmcp token' (no subaction) -> Show current token
+    if (-not $SubAction) {
+        if ($token) {
+            Write-Host "`n========================================================" -ForegroundColor Cyan
+            Write-Host "           مفتاح الأمان الحالي (Current Token)           " -ForegroundColor White
+            Write-Host "========================================================" -ForegroundColor Cyan
+            Write-Host $token -ForegroundColor Yellow
+            Write-Host "`nطريقة الربط (Authentication):" -ForegroundColor DarkCyan
+            Write-Host "  • For ChatGPT    : Authorization: Bearer $token" -ForegroundColor White
+            Write-Host "  • For Claude Web : Append '?token=$token' to the SSE URL" -ForegroundColor White
+            Write-Host "`nأوامر تغيير وتدوير المفتاح (Rotate / Change):" -ForegroundColor DarkGray
+            Write-Host "  winmcp token new             - توليد مفتاح عشوائي جديد (256-bit Random)" -ForegroundColor DarkGray
+            Write-Host "  winmcp token set <your_key>  - تعيين مفتاح أمان مخصص من كتابتك" -ForegroundColor DarkGray
+            Write-Host "  winmcp token change          - فتح المعالج التفاعلي للاختيار بين العشوائي والمخصص`n" -ForegroundColor DarkGray
+        } else {
+            Write-Host "No token found in .env" -ForegroundColor Red
+        }
+        return
+    }
+
+    $newToken = ""
+    switch ($SubAction.ToLower()) {
+        "new" {
+            $newToken = Generate-RandomToken
+            Write-Host "تم توليد مفتاح أمان عشوائي جديد فائق التشفير (256-bit Random)." -ForegroundColor Green
+        }
+        "random" {
+            $newToken = Generate-RandomToken
+            Write-Host "تم توليد مفتاح أمان عشوائي جديد فائق التشفير (256-bit Random)." -ForegroundColor Green
+        }
+        "rotate" {
+            $newToken = Generate-RandomToken
+            Write-Host "تم تدوير المفتاح وتوليد مفتاح عشوائي جديد (256-bit Random)." -ForegroundColor Green
+        }
+        "generate" {
+            $newToken = Generate-RandomToken
+            Write-Host "تم توليد مفتاح أمان عشوائي جديد فائق التشفير (256-bit Random)." -ForegroundColor Green
+        }
+        "set" {
+            if ($CustomValue) {
+                $newToken = $CustomValue.Trim()
+            } else {
+                $newToken = Read-Host "أدخل مفتاح الأمان المخصص الجديد (Enter your custom token)"
+                $newToken = $newToken.Trim()
+            }
+        }
+        "custom" {
+            if ($CustomValue) {
+                $newToken = $CustomValue.Trim()
+            } else {
+                $newToken = Read-Host "أدخل مفتاح الأمان المخصص الجديد (Enter your custom token)"
+                $newToken = $newToken.Trim()
+            }
+        }
+        "change" {
+            Write-Host "`n========================================================" -ForegroundColor Cyan
+            Write-Host "           إدارة وتغيير مفتاح الأمان (Token)            " -ForegroundColor White
+            Write-Host "========================================================" -ForegroundColor Cyan
+            if ($token) {
+                Write-Host "المفتاح الحالي: $token`n" -ForegroundColor DarkGray
+            }
+            Write-Host "اختر طريقة تغيير المفتاح:" -ForegroundColor White
+            Write-Host "--------------------------------------------------------" -ForegroundColor DarkCyan
+            Write-Host " [1] توليد مفتاح أمان عشوائي فائق التشفير (Random 256-bit)" -ForegroundColor Green
+            Write-Host "     • يولد مفتاحاً مشفراً قوياً تلقائياً من 64 خانة."
+            Write-Host " [2] كتابة مفتاح أمان مخصص بنفسي (Custom Token)" -ForegroundColor Magenta
+            Write-Host "     • يمكنك كتابة وتحديد أي كلمة سر أو مفتاح تريده بنفسك."
+            Write-Host " [3] إلغاء والاحتفاظ بالمفتاح الحالي" -ForegroundColor DarkGray
+            Write-Host "--------------------------------------------------------" -ForegroundColor DarkCyan
+            $c = Read-Host "أدخل اختيارك [1 أو 2 أو 3] (الافتراضي 1)"
+            if ($c -eq "2") {
+                while (-not $newToken) {
+                    $newToken = Read-Host "أدخل التوكن المخصص الجديد الخاص بك (Custom Token)"
+                    $newToken = $newToken.Trim()
+                    if (-not $newToken) {
+                        Write-Host "لا يمكن ترك المفتاح فارغاً!" -ForegroundColor Yellow
+                    }
+                }
+            } elseif ($c -eq "3") {
+                Write-Host "تم إلغاء تغيير المفتاح والاحتفاظ بالمفتاح الحالي." -ForegroundColor Yellow
+                return
+            } else {
+                $newToken = Generate-RandomToken
+                Write-Host "تم توليد مفتاح عشوائي مشفر جديد بنجاح." -ForegroundColor Green
+            }
+        }
+        default {
+            # In case the user ran: winmcp token my_custom_token_directly
+            $newToken = $SubAction.Trim()
+        }
+    }
+
+    if ($newToken) {
+        # Update .env file
+        $content = Get-Content $envFile
+        $newContent = @()
+        $found = $false
+        foreach ($line in $content) {
+            if ($line -match "^WINMCP_AUTH_TOKEN=") {
+                $newContent += "WINMCP_AUTH_TOKEN=$newToken"
+                $found = $true
+            } else {
+                $newContent += $line
+            }
+        }
+        if (-not $found) {
+            $newContent += "WINMCP_AUTH_TOKEN=$newToken"
+        }
+        $newContent | Out-File -FilePath $envFile -Encoding utf8 -Force
+        [Environment]::SetEnvironmentVariable("WINMCP_AUTH_TOKEN", $newToken, "Process")
+
+        $tunnelUrl = Get-TunnelUrl
+
+        Write-Host "`n========================================================" -ForegroundColor Green
+        Write-Host "       [✔] تم تحديث مفتاح الأمان (Token) بنجاح!         " -ForegroundColor White
+        Write-Host "========================================================" -ForegroundColor Green
+        Write-Host "المفتاح الجديد (New Token):" -ForegroundColor White
+        Write-Host $newToken -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "طريقة الاستخدام مع أدوات الذكاء الاصطناعي:" -ForegroundColor Cyan
+        Write-Host " • مع ChatGPT: اختر Bearer Token وألصق المفتاح الجديد." -ForegroundColor White
+        if ($tunnelUrl) {
+            Write-Host " • مع Claude Web: الرابط المحدث:" -ForegroundColor White
+            Write-Host "   $tunnelUrl/sse?token=$newToken" -ForegroundColor Cyan
+        }
+        Write-Host "--------------------------------------------------------" -ForegroundColor DarkGray
+        Write-Host "جاري إعادة تشغيل السيرفر لتطبيق التوكن الجديد فوراً..." -ForegroundColor Yellow
+        Restart-WinMCP
     } else {
-        Write-Host "No token found in .env" -ForegroundColor Red
+        Write-Host "تم إلغاء تغيير المفتاح." -ForegroundColor Yellow
     }
 }
 
@@ -415,7 +553,10 @@ function Show-Help {
     Write-Host "  winmcp autostart enable    - Enable automatic start on user logon"
     Write-Host "  winmcp autostart disable   - Disable automatic start on user logon"
     Write-Host "  winmcp logs                - Display recent audit logs of AI interactions"
-    Write-Host "  winmcp token               - Display the full authentication token"
+    Write-Host "  winmcp token               - Display current token"
+    Write-Host "  winmcp token new           - Generate a new random 256-bit token"
+    Write-Host "  winmcp token set <key>     - Set a custom token"
+    Write-Host "  winmcp token change        - Interactive token change wizard"
     Write-Host "  winmcp help                - Show this help message`n"
 }
 
@@ -430,7 +571,7 @@ switch ($Command.ToLower()) {
     "service"   { Manage-Service -Action $SubCommand }
     "autostart" { Manage-AutoStart -Action $SubCommand }
     "logs"      { Show-Logs }
-    "token"     { Show-Token }
+    "token"     { Manage-Token -SubAction $SubCommand -CustomValue $Value }
     "help"      { Show-Help }
     default     { Show-Status }
 }
