@@ -382,6 +382,12 @@ Write-Host "`nBearer Authentication Token:" -ForegroundColor Cyan
 Write-Host "  $token" -ForegroundColor White
 
 Write-Host "`n----------------------------------------------------------------------" -ForegroundColor DarkCyan
+Write-Host "Interactive Web Control Center Dashboard:" -ForegroundColor Green
+Write-Host "  Local URL  : http://127.0.0.1:8765/dashboard" -ForegroundColor White
+Write-Host "  Remote URL : $finalPublicUrl/dashboard?token=$token" -ForegroundColor White
+Write-Host "  Launcher   : Double-click dashboard.bat or run 'winmcp dashboard'" -ForegroundColor DarkYellow
+
+Write-Host "`n----------------------------------------------------------------------" -ForegroundColor DarkCyan
 Write-Host "1. How to connect with Claude Web (claude.ai):" -ForegroundColor White
 Write-Host "  1. Open claude.ai -> Settings -> Integrations (or Connectors)."
 Write-Host "  2. Click Add Custom MCP Connector."
@@ -408,6 +414,7 @@ Write-Host @"
 "@ -ForegroundColor DarkYellow
 
 Write-Host "`nUseful CLI Commands (run anytime in terminal):" -ForegroundColor Cyan
+Write-Host "  winmcp dashboard - Open visual control center in browser"
 Write-Host "  winmcp status    - Show dashboard and public URL"
 Write-Host "  winmcp stop      - Stop all WinMCP processes"
 Write-Host "  winmcp start     - Launch server and tunnel"

@@ -15,6 +15,8 @@ import logging
 import datetime
 import threading
 import subprocess
+import re
+import secrets
 from typing import Dict, Any, Optional
 from urllib.parse import parse_qs, urlparse
 
@@ -36,6 +38,22 @@ def load_env(path: str) -> Dict[str, str]:
                     config[k.strip()] = v.strip()
     return config
 
+def save_env_value(key: str, val: str):
+    lines = []
+    found = False
+    if os.path.exists(ENV_PATH):
+        with open(ENV_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip().startswith(f"{key}="):
+                    lines.append(f"{key}={val}\n")
+                    found = True
+                else:
+                    lines.append(line)
+    if not found:
+        lines.append(f"{key}={val}\n")
+    with open(ENV_PATH, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
 ENV_CONFIG = load_env(ENV_PATH)
 
 HOST = os.environ.get("WINMCP_HOST", ENV_CONFIG.get("WINMCP_HOST", "127.0.0.1"))
@@ -52,9 +70,9 @@ if not os.path.isabs(LOG_DIR):
 
 os.makedirs(LOG_DIR, exist_ok=True)
 AUDIT_LOG_FILE = os.path.join(LOG_DIR, "gateway-audit.log")
-
 if not AUTH_TOKEN:
-    raise RuntimeError("WINMCP_AUTH_TOKEN is not configured! Please check your .env file.")
+    AUTH_TOKEN = secrets.token_hex(32)
+    save_env_value("WINMCP_AUTH_TOKEN", AUTH_TOKEN)
 
 # --- Security Classification Matrix ---
 READ_ONLY_TOOLS = {
@@ -324,7 +342,7 @@ def add_cors_headers(resp):
 
 # --- Endpoints ---
 
-@app.route("/", methods=["GET"])
+@app.route("/api/info", methods=["GET"])
 def index():
     return jsonify({
         "status": "online",
@@ -550,6 +568,203 @@ def post_messages():
     })
 
     return Response(status=202)
+
+# --- Interactive Web Dashboard & Control API ---
+
+@app.route("/", methods=["GET"])
+@app.route("/dashboard", methods=["GET"])
+def dashboard():
+    """Serves the interactive web dashboard."""
+    template_path = os.path.join(GATEWAY_DIR, "templates", "dashboard.html")
+    if os.path.exists(template_path):
+        with open(template_path, "r", encoding="utf-8") as f:
+            return f.read(), 200, {"Content-Type": "text/html; charset=utf-8"}
+    return "Dashboard template not found", 404
+
+@app.route("/api/status", methods=["GET"])
+def api_status():
+    global AUTH_TOKEN
+    env_data = load_env(ENV_PATH)
+    tunnel_mode = env_data.get("WINMCP_TUNNEL_MODE", "Quick")
+    custom_domain = env_data.get("WINMCP_CUSTOM_DOMAIN", "")
+    public_url = f"https://{custom_domain}" if (tunnel_mode == "Custom" and custom_domain) else ""
+    
+    if not public_url and os.path.exists(os.path.join(LOG_DIR, "cloudflared_error.log")):
+        try:
+            with open(os.path.join(LOG_DIR, "cloudflared_error.log"), "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    m = re.search(r"(https://[a-zA-Z0-9-]+\.trycloudflare\.com)", line)
+                    if m:
+                        public_url = m.group(1)
+        except Exception:
+            pass
+    if not public_url:
+        public_url = f"http://{HOST}:{PORT}"
+
+    core_alive = BACKEND.is_alive()
+    core_pid = BACKEND.proc.pid if BACKEND.proc else None
+
+    # Autostart check
+    startup_vbs = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "WinMCP_AutoStart.vbs")
+    autostart_active = os.path.exists(startup_vbs)
+
+    token_masked = AUTH_TOKEN[:6] + "..." + AUTH_TOKEN[-6:] if len(AUTH_TOKEN) > 12 else "****"
+
+    return jsonify({
+        "status": "ok",
+        "core_alive": core_alive,
+        "core_pid": core_pid,
+        "gateway_pid": os.getpid(),
+        "port": PORT,
+        "host": HOST,
+        "binary_path": BINARY_PATH,
+        "tunnel_mode": tunnel_mode,
+        "custom_domain": custom_domain,
+        "tunnel_connected": True,
+        "public_url": public_url,
+        "token": AUTH_TOKEN,
+        "token_masked": token_masked,
+        "autostart_active": autostart_active,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+    })
+
+@app.route("/api/token/rotate", methods=["POST"])
+def api_token_rotate():
+    global AUTH_TOKEN
+    new_token = secrets.token_hex(32)
+    save_env_value("WINMCP_AUTH_TOKEN", new_token)
+    AUTH_TOKEN = new_token
+    return jsonify({"status": "ok", "token": new_token})
+
+@app.route("/api/token/custom", methods=["POST"])
+def api_token_custom():
+    global AUTH_TOKEN
+    data = request.get_json(silent=True) or {}
+    new_token = data.get("token", "").strip()
+    if len(new_token) < 8:
+        return jsonify({"error": "Token must be at least 8 characters"}), 400
+    save_env_value("WINMCP_AUTH_TOKEN", new_token)
+    AUTH_TOKEN = new_token
+    return jsonify({"status": "ok", "token": new_token})
+
+@app.route("/api/domain/update", methods=["POST"])
+def api_domain_update():
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode", "Quick")
+    domain = data.get("domain", "").strip()
+    token = data.get("token", "").strip()
+
+    save_env_value("WINMCP_TUNNEL_MODE", mode)
+    if mode == "Custom":
+        if domain:
+            save_env_value("WINMCP_CUSTOM_DOMAIN", domain)
+        if token:
+            save_env_value("WINMCP_TUNNEL_TOKEN", token)
+    else:
+        save_env_value("WINMCP_CUSTOM_DOMAIN", "")
+        save_env_value("WINMCP_TUNNEL_TOKEN", "")
+
+    # Restart cloudflared in background thread
+    def restart_cf():
+        subprocess.run(["powershell", "-NoProfile", "-Command", "Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue"], capture_output=True)
+        time.sleep(1)
+        start_daemon_py = os.path.join(PROJECT_DIR, "start_daemon.py")
+        subprocess.run([sys.executable, start_daemon_py], capture_output=True)
+    
+    threading.Thread(target=restart_cf, daemon=True).start()
+    return jsonify({"status": "ok", "mode": mode, "domain": domain})
+
+@app.route("/api/server/restart", methods=["POST"])
+def api_server_restart():
+    def restart_worker():
+        time.sleep(1)
+        run_winmcp = os.path.join(PROJECT_DIR, "run_winmcp.ps1")
+        subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", run_winmcp], capture_output=True)
+    
+    threading.Thread(target=restart_worker, daemon=True).start()
+    return jsonify({"status": "restarting"})
+
+@app.route("/api/server/stop", methods=["POST"])
+def api_server_stop():
+    def stop_worker():
+        time.sleep(1)
+        stop_winmcp = os.path.join(PROJECT_DIR, "stop_winmcp.ps1")
+        subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", stop_winmcp], capture_output=True)
+    
+    threading.Thread(target=stop_worker, daemon=True).start()
+    return jsonify({"status": "stopping"})
+
+@app.route("/api/autostart/toggle", methods=["POST"])
+def api_autostart_toggle():
+    startup_vbs = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "WinMCP_AutoStart.vbs")
+    is_active = os.path.exists(startup_vbs)
+    
+    script = "uninstall_autostart.ps1" if is_active else "install_autostart.ps1"
+    target = os.path.join(PROJECT_DIR, script)
+    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", target], capture_output=True)
+    return jsonify({"status": "ok", "autostart_active": not is_active})
+
+@app.route("/api/service/action", methods=["POST"])
+def api_service_action():
+    target = os.path.join(PROJECT_DIR, "install_service.ps1")
+    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", target], capture_output=True)
+    return jsonify({"status": "ok"})
+
+@app.route("/api/logs/audit", methods=["GET"])
+def api_logs_audit():
+    audit_file = os.path.join(LOG_DIR, "gateway-audit.log")
+    logs = []
+    if os.path.exists(audit_file):
+        try:
+            with open(audit_file, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+                for line in reversed(lines[-40:]):
+                    line = line.strip()
+                    if line:
+                        try:
+                            logs.append(json.loads(line))
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+    return jsonify({"logs": logs})
+
+@app.route("/api/tools", methods=["GET"])
+def api_tools():
+    resp = BACKEND.dispatch({"jsonrpc": "2.0", "id": 9999, "method": "tools/list"})
+    tools_raw = (resp.get("result", {}) if resp else {}).get("tools", [])
+    
+    annotated = []
+    for t in tools_raw:
+        t_name = t.get("name", "")
+        t_risk = classify_tool(t_name, {})
+        annotated.append({
+            "name": t_name,
+            "description": t.get("description", ""),
+            "inputSchema": t.get("inputSchema", {}),
+            "risk": t_risk
+        })
+    return jsonify({"tools": annotated})
+
+@app.route("/api/tools/execute", methods=["POST"])
+def api_tools_execute():
+    data = request.get_json(silent=True) or {}
+    tool_name = data.get("name", "")
+    args = data.get("arguments", {})
+
+    if not tool_name:
+        return jsonify({"error": "Missing tool name"}), 400
+
+    resp = BACKEND.dispatch({
+        "jsonrpc": "2.0",
+        "id": int(time.time()),
+        "method": "tools/call",
+        "params": {
+            "name": tool_name,
+            "arguments": args
+        }
+    })
+    return jsonify(resp)
 
 if __name__ == "__main__":
     print(f"==================================================")

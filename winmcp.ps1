@@ -136,9 +136,13 @@ function Show-Status {
     }
 
     Write-Host "`n----------------- Access Endpoints ---------------------" -ForegroundColor DarkCyan
+    Write-Host " Local Dashboard  : " -NoNewline -ForegroundColor Yellow
+    Write-Host "http://127.0.0.1:8765/dashboard" -ForegroundColor Green
     if ($tunnelUrl) {
         Write-Host " Public URL       : " -NoNewline -ForegroundColor Yellow
         Write-Host $tunnelUrl -ForegroundColor White
+        Write-Host " Remote Dashboard : " -NoNewline -ForegroundColor Yellow
+        Write-Host "$tunnelUrl/dashboard?token=$token" -ForegroundColor Cyan
         Write-Host " ChatGPT Endpoint : " -NoNewline -ForegroundColor Yellow
         Write-Host "$tunnelUrl/mcp" -ForegroundColor Cyan
         Write-Host " Claude Web SSE   : " -NoNewline -ForegroundColor Yellow
@@ -544,8 +548,21 @@ function Uninstall-WinMCP {
     & "$scriptDir\uninstall.ps1"
 }
 
+function Open-Dashboard {
+    $conn = Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue
+    if (-not $conn) {
+        Write-Host "WinMCP server is not running. Starting it now..." -ForegroundColor Yellow
+        Start-WinMCP
+        Start-Sleep -Seconds 2
+    }
+    $url = "http://127.0.0.1:8765/dashboard"
+    Write-Host "Opening WinMCP Interactive Dashboard: $url" -ForegroundColor Green
+    Start-Process $url
+}
+
 function Show-Help {
     Write-Host "`nWinMCP Management CLI Options:" -ForegroundColor Cyan
+    Write-Host "  winmcp dashboard           - Open the Interactive Web Control Center Dashboard"
     Write-Host "  winmcp status              - Show current server status, public URL, and endpoints"
     Write-Host "  winmcp start               - Launch Windows MCP Server, Gateway and Cloudflare Tunnel"
     Write-Host "  winmcp stop                - Safely stop all WinMCP processes"
@@ -566,6 +583,9 @@ function Show-Help {
 }
 
 switch ($Command.ToLower()) {
+    "dashboard" { Open-Dashboard }
+    "gui"       { Open-Dashboard }
+    "web"       { Open-Dashboard }
     "status"    { Show-Status }
     "start"     { Start-WinMCP }
     "stop"      { Stop-WinMCP }

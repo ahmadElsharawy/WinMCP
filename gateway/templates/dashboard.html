@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WinMCP Control Center | Interactive Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #08090d;
+      --bg-surface: #0f1219;
+      --bg-card: rgba(18, 22, 34, 0.75);
+      --bg-card-hover: rgba(26, 32, 48, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(0, 242, 254, 0.4);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --cyan: #00f2fe;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --rose: #f43f5e;
+      --gradient-cyan-blue: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+      --gradient-purple-pink: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+      --gradient-card: linear-gradient(145deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+      --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      background-image: 
+        radial-gradient(at 10% 10%, rgba(0, 242, 254, 0.08) 0px, transparent 40%),
+        radial-gradient(at 90% 20%, rgba(139, 92, 246, 0.08) 0px, transparent 40%),
+        radial-gradient(at 50% 90%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-primary);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-surface);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #242b3d;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #333d54;
+    }
+
+    /* Top Navigation Bar */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(15, 18, 25, 0.85);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      text-decoration: none;
+    }
+
+    .logo-badge {
+      width: 42px;
+      height: 42px;
+      border-radius: var(--radius-md);
+      background: var(--gradient-cyan-blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      color: #000;
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.35);
+    }
+
+    .brand-text h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+
+    .brand-text p {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--emerald);
+      box-shadow: 0 0 10px var(--emerald);
+      animation: pulse 2s infinite;
+    }
+
+    .pulse-dot.degraded {
+      background: var(--amber);
+      box-shadow: 0 0 10px var(--amber);
+    }
+
+    .pulse-dot.stopped {
+      background: var(--rose);
+      box-shadow: 0 0 10px var(--rose);
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.15); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+      text-decoration: none;
+      outline: none;
+    }
+
+    .btn-primary {
+      background: var(--gradient-cyan-blue);
+      color: #050b14;
+      font-weight: 700;
+      box-shadow: 0 4px 14px rgba(0, 242, 254, 0.25);
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(0, 242, 254, 0.4);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-subtle);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-danger {
+      background: rgba(244, 63, 94, 0.1);
+      border-color: rgba(244, 63, 94, 0.3);
+      color: #fda4af;
+    }
+    .btn-danger:hover {
+      background: rgba(244, 63, 94, 0.2);
+      border-color: var(--rose);
+    }
+
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 11px;
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 28px 24px 60px;
+    }
+
+    /* Grid Layouts */
+    .grid-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+
+    .grid-main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    @media (max-width: 1024px) {
+      .grid-main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Glass Cards */
+    .card {
+      background: var(--bg-card);
+      background-image: var(--gradient-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: var(--shadow-glass);
+      transition: border-color 0.25s ease, transform 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .card-title svg {
+      width: 18px;
+      height: 18px;
+      color: var(--cyan);
+    }
+
+    /* Metric Item */
+    .metric-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: #fff;
+      margin-top: 6px;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .metric-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* AI Connection Hub */
+    .ai-hero-card {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.06) 0%, rgba(139, 92, 246, 0.08) 100%), var(--bg-card);
+      border: 1px solid rgba(0, 242, 254, 0.25);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 28px;
+    }
+
+    .ai-tabs {
+      display: flex;
+      gap: 10px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 14px;
+      margin-bottom: 18px;
+    }
+
+    .ai-tab {
+      padding: 8px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: transparent;
+      color: var(--text-secondary);
+      border: none;
+      transition: all 0.2s;
+    }
+    .ai-tab.active {
+      background: rgba(0, 242, 254, 0.12);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+    }
+
+    .url-box {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 10px;
+    }
+
+    .url-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: #38bdf8;
+      word-break: break-all;
+    }
+
+    .copy-btn {
+      flex-shrink: 0;
+      background: rgba(0, 242, 254, 0.15);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      color: var(--cyan);
+      padding: 7px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover {
+      background: var(--cyan);
+      color: #000;
+    }
+
+    /* Forms & Inputs */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .form-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 13px;
+      font-family: 'JetBrains Mono', monospace;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+    }
+
+    /* Tools Grid */
+    .tools-search {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .filter-badge {
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+      transition: all 0.2s;
+    }
+    .filter-badge.active {
+      background: rgba(0, 242, 254, 0.15);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .tools-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+      max-height: 480px;
+      overflow-y: auto;
+      padding-right: 6px;
+    }
+
+    .tool-item {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .tool-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .tool-name {
+      font-weight: 700;
+      font-size: 13px;
+      color: #fff;
+    }
+
+    .tool-risk {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      width: fit-content;
+      text-transform: uppercase;
+    }
+    .risk-READ_ONLY {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .risk-LOW_RISK {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .risk-HIGH_RISK {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    /* Logs Terminal */
+    .terminal-window {
+      background: #05070a;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      height: 380px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column-reverse;
+    }
+
+    .log-line {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      display: flex;
+      gap: 12px;
+      align-items: baseline;
+    }
+    .log-time {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+    .log-method {
+      font-weight: 700;
+      color: var(--cyan);
+    }
+    .log-status-success {
+      color: var(--emerald);
+    }
+    .log-status-error, .log-status-unauthorized {
+      color: var(--rose);
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid var(--border-accent);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 100;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      z-index: 90;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open {
+      display: flex;
+    }
+    .modal {
+      background: var(--bg-surface);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 600px;
+      padding: 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <a href="#" class="brand">
+      <div class="logo-badge">W</div>
+      <div class="brand-text">
+        <h1>WinMCP Control Center</h1>
+        <p>v1.1.0 Interactive AI Gateway</p>
+      </div>
+    </a>
+
+    <div class="header-actions">
+      <div class="status-pill" id="systemStatusPill">
+        <span class="pulse-dot" id="systemPulse"></span>
+        <span id="systemStatusText">Checking Status...</span>
+      </div>
+
+      <button class="btn btn-secondary btn-sm" onclick="restartServer()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        Restart
+      </button>
+      <button class="btn btn-danger btn-sm" onclick="stopServer()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+        Stop
+      </button>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Top Key Metrics -->
+    <div class="grid-metrics">
+      <div class="card">
+        <span class="metric-label">Core Engine</span>
+        <div class="metric-value">
+          <span id="coreStatus">Online</span>
+        </div>
+        <div class="metric-sub" id="corePid">PID: -- | 37 Tools Loaded</div>
+      </div>
+
+      <div class="card">
+        <span class="metric-label">Gateway Server</span>
+        <div class="metric-value">
+          <span>Port 8765</span>
+        </div>
+        <div class="metric-sub" id="gatewayUptime">HTTP / SSE Streamable</div>
+      </div>
+
+      <div class="card">
+        <span class="metric-label">Cloudflare Tunnel</span>
+        <div class="metric-value">
+          <span id="tunnelBadge" style="color: var(--cyan);">Active</span>
+        </div>
+        <div class="metric-sub" id="tunnelModeText">Mode: Custom Domain</div>
+      </div>
+
+      <div class="card">
+        <span class="metric-label">Background Persistence</span>
+        <div class="metric-value">
+          <span id="autostartBadge" style="color: var(--emerald);">Enabled</span>
+        </div>
+        <div class="metric-sub" id="autostartSub">Logon Task & Startup VBS</div>
+      </div>
+    </div>
+
+    <!-- AI Client Connection Hub -->
+    <div class="ai-hero-card">
+      <div class="card-header">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          One-Click AI Client Connection Hub
+        </div>
+        <span class="status-pill" style="border-color: var(--border-accent); color: var(--cyan);">
+          Turnkey Ready
+        </span>
+      </div>
+
+      <div class="ai-tabs">
+        <button class="ai-tab active" onclick="switchAiTab('claude')">Claude Web (claude.ai)</button>
+        <button class="ai-tab" onclick="switchAiTab('chatgpt')">ChatGPT (Custom GPTs)</button>
+        <button class="ai-tab" onclick="switchAiTab('desktop')">Claude Desktop</button>
+      </div>
+
+      <!-- Tab 1: Claude Web -->
+      <div id="aiTabClaude">
+        <p style="font-size: 13px; color: var(--text-secondary);">
+          Paste this <strong>One-Link SSE URL</strong> directly into <strong>claude.ai &rarr; Settings &rarr; Connectors &rarr; Add Custom MCP Connector</strong>:
+        </p>
+        <div class="url-box">
+          <span class="url-text" id="claudeSseUrl">Loading...</span>
+          <button class="copy-btn" onclick="copyText('claudeSseUrl', 'Claude Web SSE URL')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy URL
+          </button>
+        </div>
+        <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+          &bull; Modern Streamable HTTP endpoint: <code id="claudeHttpUrl" style="color: var(--cyan);">--</code>
+        </div>
+      </div>
+
+      <!-- Tab 2: ChatGPT -->
+      <div id="aiTabChatGPT" style="display: none;">
+        <p style="font-size: 13px; color: var(--text-secondary);">
+          In ChatGPT <strong>Custom GPT &rarr; Actions &rarr; Create new action</strong>:
+        </p>
+        <div class="form-group" style="margin-top: 12px;">
+          <label class="form-label">Server / Endpoint URL</label>
+          <div class="url-box">
+            <span class="url-text" id="chatgptUrl">Loading...</span>
+            <button class="copy-btn" onclick="copyText('chatgptUrl', 'ChatGPT Endpoint URL')">Copy URL</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Authentication: Bearer Token</label>
+          <div class="url-box">
+            <span class="url-text" id="chatgptToken">Loading...</span>
+            <button class="copy-btn" onclick="copyText('chatgptToken', 'Bearer Token')">Copy Token</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Claude Desktop -->
+      <div id="aiTabDesktop" style="display: none;">
+        <p style="font-size: 13px; color: var(--text-secondary);">
+          Add this to <code>%APPDATA%\Claude\claude_desktop_config.json</code> for direct local stdio execution:
+        </p>
+        <div class="url-box" style="align-items: flex-start;">
+          <pre class="url-text" id="desktopJson" style="font-size: 11px;">Loading...</pre>
+          <button class="copy-btn" onclick="copyText('desktopJson', 'Claude Desktop JSON')">Copy JSON</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Grid: Controls & Management -->
+    <div class="grid-main">
+
+      <!-- Left Column: Token & Domain Management -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+
+        <!-- Security & Bearer Token Card -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Bearer Security Token
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="toggleTokenVisibility()" id="toggleTokenBtn">
+              Show Token
+            </button>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Active Bearer Token</label>
+            <input type="password" id="activeTokenInput" class="form-input" readonly value="Loading token...">
+          </div>
+
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-sm" onclick="rotateToken()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              Generate Random 256-bit Token
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="openCustomTokenModal()">
+              Set Custom Token
+            </button>
+          </div>
+        </div>
+
+        <!-- Domain & Cloudflare Tunnel Settings -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              Domain & Cloudflare Tunnel
+            </div>
+            <span class="status-pill" id="domainModePill">Custom Domain</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tunnel Mode</label>
+            <div style="display: flex; gap: 12px;">
+              <label style="font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="tunnelMode" value="Custom" id="modeCustom" onchange="toggleDomainInputs()">
+                Custom Domain (Permanent)
+              </label>
+              <label style="font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="tunnelMode" value="Quick" id="modeQuick" onchange="toggleDomainInputs()">
+                Quick Tunnel (*.trycloudflare.com)
+              </label>
+            </div>
+          </div>
+
+          <div id="customDomainFields">
+            <div class="form-group">
+              <label class="form-label">Custom Domain Hostname</label>
+              <input type="text" id="domainNameInput" class="form-input" placeholder="mcp.yourdomain.com">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Cloudflare Tunnel Token</label>
+              <input type="password" id="tunnelTokenInput" class="form-input" placeholder="eyJh...">
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-sm" onclick="saveDomainSettings()">
+            Save & Update Tunnel
+          </button>
+        </div>
+
+        <!-- Background Persistence & Services -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              Windows Services & Persistence
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+            <div>
+              <div style="font-size: 13px; font-weight: 600;">Interactive Logon AutoStart</div>
+              <div style="font-size: 12px; color: var(--text-muted);">Starts silently upon user logon with full desktop UI control.</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btnToggleAutostart" onclick="toggleAutostart()">Toggle</button>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+            <div>
+              <div style="font-size: 13px; font-weight: 600;">24/7 Windows Service (NSSM)</div>
+              <div style="font-size: 12px; color: var(--text-muted);">System-level headless service for servers before logon.</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btnToggleService" onclick="toggleService()">Install Service</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: 37 Tools Explorer & Live Logs -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+
+        <!-- 37 Tools Explorer -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              Interactive 37 Tools Explorer
+            </div>
+            <span class="metric-label" id="toolCountLabel">37 Tools Available</span>
+          </div>
+
+          <div class="tools-search">
+            <input type="text" id="toolSearchInput" class="form-input" placeholder="Search tools (e.g., PowerShell, App, Screenshot)..." oninput="filterTools()">
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+            <span class="filter-badge active" onclick="setToolFilter('ALL', this)">All (37)</span>
+            <span class="filter-badge" onclick="setToolFilter('READ_ONLY', this)">Read Only</span>
+            <span class="filter-badge" onclick="setToolFilter('LOW_RISK', this)">Low Risk</span>
+            <span class="filter-badge" onclick="setToolFilter('HIGH_RISK', this)">High Risk</span>
+          </div>
+
+          <div class="tools-list" id="toolsContainer">
+            <!-- Dynamic tools rendered here -->
+          </div>
+        </div>
+
+        <!-- Live Audit Log Streamer -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              Live Audit & Event Streamer
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span class="status-pill" style="font-size: 11px;">
+                <span class="pulse-dot"></span> Live
+              </span>
+              <button class="btn btn-secondary btn-sm" onclick="fetchLogs()">Refresh</button>
+            </div>
+          </div>
+
+          <div class="terminal-window" id="logTerminal">
+            <!-- Dynamic log entries -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Custom Token Modal -->
+  <div class="modal-overlay" id="customTokenModal">
+    <div class="modal">
+      <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">Set Custom Bearer Token</h3>
+      <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+        Choose your own secret authentication key (minimum 8 characters).
+      </p>
+      <div class="form-group">
+        <label class="form-label">New Custom Token</label>
+        <input type="text" id="newCustomTokenInput" class="form-input" placeholder="MySecurePassword123">
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+        <button class="btn btn-secondary" onclick="closeCustomTokenModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitCustomToken()">Apply Token</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tool Result Modal -->
+  <div class="modal-overlay" id="toolResultModal">
+    <div class="modal" style="max-width: 750px;">
+      <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px;" id="modalToolTitle">Tool Result</h3>
+      <div class="terminal-window" style="height: 340px;" id="modalToolOutput"></div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+        <button class="btn btn-secondary" onclick="closeToolModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--cyan);"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    <span id="toastMsg">Action completed</span>
+  </div>
+
+  <script>
+    let state = {
+      token: "",
+      tokenVisible: false,
+      publicUrl: "",
+      tools: [],
+      currentFilter: "ALL"
+    };
+
+    // Initialize Dashboard
+    document.addEventListener("DOMContentLoaded", () => {
+      fetchStatus();
+      fetchTools();
+      fetchLogs();
+      setInterval(fetchStatus, 5000);
+      setInterval(fetchLogs, 4000);
+    });
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch("/api/status");
+        if (!res.ok) throw new Error("Failed status");
+        const data = await res.json();
+        
+        state.token = data.token || "";
+        state.publicUrl = data.public_url || "";
+        
+        // Update pills
+        const pill = document.getElementById("systemStatusPill");
+        const pulse = document.getElementById("systemPulse");
+        const text = document.getElementById("systemStatusText");
+        
+        if (data.core_alive) {
+          pulse.className = "pulse-dot";
+          text.textContent = "System Operational";
+          document.getElementById("coreStatus").textContent = "Online";
+          document.getElementById("coreStatus").style.color = "var(--emerald)";
+        } else {
+          pulse.className = "pulse-dot degraded";
+          text.textContent = "Backend Idle";
+          document.getElementById("coreStatus").textContent = "Idle / Restarting";
+          document.getElementById("coreStatus").style.color = "var(--amber)";
+        }
+
+        document.getElementById("corePid").textContent = `PID: ${data.core_pid || '--'} | Toolsets: all`;
+        document.getElementById("tunnelBadge").textContent = data.tunnel_connected ? "Connected" : "Starting";
+        document.getElementById("tunnelBadge").style.color = data.tunnel_connected ? "var(--cyan)" : "var(--amber)";
+        document.getElementById("tunnelModeText").textContent = `Mode: ${data.tunnel_mode} Tunnel`;
+
+        // Token
+        if (!state.tokenVisible) {
+          document.getElementById("activeTokenInput").value = data.token_masked || "••••••••••••••••••••••••••••••••";
+        } else {
+          document.getElementById("activeTokenInput").value = state.token;
+        }
+
+        // URLs
+        const sseLink = `${state.publicUrl}/sse?token=${state.token}`;
+        const mcpLink = `${state.publicUrl}/mcp`;
+        
+        document.getElementById("claudeSseUrl").textContent = sseLink;
+        document.getElementById("claudeHttpUrl").textContent = mcpLink;
+        document.getElementById("chatgptUrl").textContent = mcpLink;
+        document.getElementById("chatgptToken").textContent = state.token;
+
+        // Desktop JSON
+        const desktopConf = {
+          "mcpServers": {
+            "windows": {
+              "command": data.binary_path || "C:\\path\\to\\windows-mcp-server.exe",
+              "args": ["stdio", "--toolsets", "all"]
+            }
+          }
+        };
+        document.getElementById("desktopJson").textContent = JSON.stringify(desktopConf, null, 2);
+
+        // Domain radio
+        if (data.tunnel_mode === "Custom") {
+          document.getElementById("modeCustom").checked = true;
+          document.getElementById("domainNameInput").value = data.custom_domain || "";
+        } else {
+          document.getElementById("modeQuick").checked = true;
+        }
+        toggleDomainInputs();
+
+        // Autostart & Service
+        document.getElementById("autostartBadge").textContent = data.autostart_active ? "Active" : "Disabled";
+        document.getElementById("autostartBadge").style.color = data.autostart_active ? "var(--emerald)" : "var(--rose)";
+        document.getElementById("btnToggleAutostart").textContent = data.autostart_active ? "Disable" : "Enable";
+
+      } catch (err) {
+        console.warn("Status fetch error:", err);
+      }
+    }
+
+    async function fetchTools() {
+      try {
+        const res = await fetch("/api/tools");
+        if (!res.ok) return;
+        const data = await res.json();
+        state.tools = data.tools || [];
+        renderTools();
+      } catch (e) {}
+    }
+
+    function renderTools() {
+      const container = document.getElementById("toolsContainer");
+      const search = document.getElementById("toolSearchInput").value.toLowerCase();
+      container.innerHTML = "";
+
+      const filtered = state.tools.filter(t => {
+        const matchSearch = t.name.toLowerCase().includes(search) || (t.description || "").toLowerCase().includes(search);
+        const matchFilter = state.currentFilter === "ALL" || t.risk === state.currentFilter;
+        return matchSearch && matchFilter;
+      });
+
+      document.getElementById("toolCountLabel").textContent = `${filtered.length} of ${state.tools.length} Tools`;
+
+      filtered.forEach(t => {
+        const el = document.createElement("div");
+        el.className = "tool-item";
+        el.innerHTML = `
+          <div>
+            <div class="tool-name">${t.name}</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${(t.description || '').substring(0, 50)}...</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="tool-risk risk-${t.risk}">${t.risk.replace('_', ' ')}</span>
+            <button class="btn btn-secondary btn-sm" onclick="runTool('${t.name}')">Run</button>
+          </div>
+        `;
+        container.appendChild(el);
+      });
+    }
+
+    function filterTools() {
+      renderTools();
+    }
+
+    function setToolFilter(filter, el) {
+      state.currentFilter = filter;
+      document.querySelectorAll(".filter-badge").forEach(b => b.classList.remove("active"));
+      el.classList.add("active");
+      renderTools();
+    }
+
+    async function runTool(toolName) {
+      document.getElementById("modalToolTitle").textContent = `Testing Tool: ${toolName}`;
+      document.getElementById("modalToolOutput").textContent = "Executing command on Windows host...";
+      document.getElementById("toolResultModal").classList.add("open");
+
+      try {
+        const res = await fetch("/api/tools/execute", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name: toolName, arguments: {}})
+        });
+        const data = await res.json();
+        document.getElementById("modalToolOutput").textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById("modalToolOutput").textContent = `Error executing tool: ${err.message}`;
+      }
+    }
+
+    function closeToolModal() {
+      document.getElementById("toolResultModal").classList.remove("open");
+    }
+
+    async function fetchLogs() {
+      try {
+        const res = await fetch("/api/logs/audit");
+        if (!res.ok) return;
+        const data = await res.json();
+        const term = document.getElementById("logTerminal");
+        term.innerHTML = "";
+        
+        (data.logs || []).forEach(l => {
+          const line = document.createElement("div");
+          line.className = "log-line";
+          const time = l.timestamp ? l.timestamp.substring(11, 19) : "";
+          const statusClass = l.status === "success" ? "log-status-success" : "log-status-error";
+          
+          line.innerHTML = `
+            <span class="log-time">${time}</span>
+            <span class="log-method">${l.method || 'REQ'}</span>
+            <span style="color: #cbd5e1;">${l.tool_name || l.rpc_method || ''}</span>
+            <span class="${statusClass}">[${l.status || 'OK'}]</span>
+            <span style="color: var(--text-muted); margin-left: auto;">${l.duration_ms ? l.duration_ms + 'ms' : ''}</span>
+          `;
+          term.appendChild(line);
+        });
+      } catch (e) {}
+    }
+
+    // Token Actions
+    function toggleTokenVisibility() {
+      state.tokenVisible = !state.tokenVisible;
+      const inp = document.getElementById("activeTokenInput");
+      const btn = document.getElementById("toggleTokenBtn");
+      if (state.tokenVisible) {
+        inp.type = "text";
+        inp.value = state.token;
+        btn.textContent = "Hide Token";
+      } else {
+        inp.type = "password";
+        inp.value = "••••••••••••••••••••••••••••••••";
+        btn.textContent = "Show Token";
+      }
+    }
+
+    async function rotateToken() {
+      if (!confirm("Are you sure you want to generate a new 256-bit authentication token? Active sessions will need the updated key.")) return;
+      try {
+        const res = await fetch("/api/token/rotate", {method: "POST"});
+        const data = await res.json();
+        if (data.token) {
+          state.token = data.token;
+          showToast("New 256-bit Bearer Token Generated!");
+          fetchStatus();
+        }
+      } catch (err) {
+        alert("Failed to rotate token: " + err.message);
+      }
+    }
+
+    function openCustomTokenModal() {
+      document.getElementById("customTokenModal").classList.add("open");
+    }
+    function closeCustomTokenModal() {
+      document.getElementById("customTokenModal").classList.remove("open");
+    }
+
+    async function submitCustomToken() {
+      const val = document.getElementById("newCustomTokenInput").value.trim();
+      if (val.length < 8) {
+        alert("Token must be at least 8 characters long.");
+        return;
+      }
+      try {
+        const res = await fetch("/api/token/custom", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({token: val})
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          closeCustomTokenModal();
+          showToast("Custom Bearer Token applied successfully!");
+          fetchStatus();
+        }
+      } catch (err) {
+        alert("Failed to set token: " + err.message);
+      }
+    }
+
+    // Domain Actions
+    function toggleDomainInputs() {
+      const isCustom = document.getElementById("modeCustom").checked;
+      document.getElementById("customDomainFields").style.display = isCustom ? "block" : "none";
+      document.getElementById("domainModePill").textContent = isCustom ? "Custom Domain" : "Quick Tunnel";
+    }
+
+    async function saveDomainSettings() {
+      const isCustom = document.getElementById("modeCustom").checked;
+      const domain = document.getElementById("domainNameInput").value.trim();
+      const token = document.getElementById("tunnelTokenInput").value.trim();
+
+      if (isCustom && (!domain || !token)) {
+        alert("Please enter both your custom domain and Cloudflare Tunnel token.");
+        return;
+      }
+
+      showToast("Updating domain & restarting tunnel...");
+      try {
+        const res = await fetch("/api/domain/update", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            mode: isCustom ? "Custom" : "Quick",
+            domain: domain,
+            token: token
+          })
+        });
+        const data = await res.json();
+        showToast("Tunnel updated! Refreshing connection...");
+        setTimeout(fetchStatus, 3000);
+      } catch (err) {
+        alert("Failed to update domain: " + err.message);
+      }
+    }
+
+    // Server Controls
+    async function restartServer() {
+      showToast("Restarting WinMCP server and refresh tunnel...");
+      await fetch("/api/server/restart", {method: "POST"});
+      setTimeout(fetchStatus, 3000);
+    }
+
+    async function stopServer() {
+      if (!confirm("Stop all WinMCP services and tunnel?")) return;
+      showToast("Stopping WinMCP...");
+      await fetch("/api/server/stop", {method: "POST"});
+      setTimeout(fetchStatus, 2000);
+    }
+
+    async function toggleAutostart() {
+      showToast("Updating logon auto-start task...");
+      await fetch("/api/autostart/toggle", {method: "POST"});
+      setTimeout(fetchStatus, 2000);
+    }
+
+    async function toggleService() {
+      showToast("Updating Windows Service...");
+      await fetch("/api/service/action", {method: "POST"});
+      setTimeout(fetchStatus, 2000);
+    }
+
+    // Tabs
+    function switchAiTab(tab) {
+      document.querySelectorAll(".ai-tab").forEach(t => t.classList.remove("active"));
+      event.target.classList.add("active");
+      document.getElementById("aiTabClaude").style.display = tab === "claude" ? "block" : "none";
+      document.getElementById("aiTabChatGPT").style.display = tab === "chatgpt" ? "block" : "none";
+      document.getElementById("aiTabDesktop").style.display = tab === "desktop" ? "block" : "none";
+    }
+
+    function copyText(elemId, label) {
+      const text = document.getElementById(elemId).textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(`Copied ${label} to clipboard!`);
+      }).catch(() => {
+        showToast("Failed to copy. Please select and copy manually.");
+      });
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      document.getElementById("toastMsg").textContent = msg;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 3000);
+    }
+  </script>
+</body>
+</html>

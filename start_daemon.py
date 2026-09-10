@@ -32,11 +32,15 @@ if os.path.exists(env_file):
                     tunnel_token = v
 
 flags = 0x08000000 | 0x00000008 # CREATE_NO_WINDOW | DETACHED_PROCESS
+breakaway = 0x01000000 # CREATE_BREAKAWAY_FROM_JOB
 
 # 1. Start gateway detached
 gw_out = open(os.path.join(log_dir, "gateway.log"), "a", encoding="utf-8")
 gw_err = open(os.path.join(log_dir, "gateway_error.log"), "a", encoding="utf-8")
-p_gw = subprocess.Popen([pythonw_exe, "-u", gateway_py], stdout=gw_out, stderr=gw_err, creationflags=flags)
+try:
+    p_gw = subprocess.Popen([pythonw_exe, "-u", gateway_py], stdout=gw_out, stderr=gw_err, creationflags=flags | breakaway)
+except Exception:
+    p_gw = subprocess.Popen([pythonw_exe, "-u", gateway_py], stdout=gw_out, stderr=gw_err, creationflags=flags)
 
 # 2. Start cloudflared detached with fresh log (mode "w" to clear old URLs)
 if os.path.exists(cf_exe):
@@ -46,7 +50,10 @@ if os.path.exists(cf_exe):
         args = [cf_exe, "tunnel", "run", "--token", tunnel_token]
     else:
         args = [cf_exe, "tunnel", "--url", "http://127.0.0.1:8765", "--protocol", "http2"]
-    p_cf = subprocess.Popen(args, stdout=cf_out, stderr=cf_err, creationflags=flags)
+    try:
+        p_cf = subprocess.Popen(args, stdout=cf_out, stderr=cf_err, creationflags=flags | breakaway)
+    except Exception:
+        p_cf = subprocess.Popen(args, stdout=cf_out, stderr=cf_err, creationflags=flags)
     print(f"Detached Gateway PID: {p_gw.pid}, Cloudflared PID: {p_cf.pid}")
 else:
     print(f"Detached Gateway PID: {p_gw.pid} (cloudflared not found)")

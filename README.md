@@ -47,7 +47,38 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; .\install.ps1
 
 ---
 
-## 🔄 2. Background Execution & Persistence Modes
+## 🖥️ 2. Interactive Web Control Center Dashboard
+
+Control your entire WinMCP server visually with buttons and mouse from a rich, glassmorphic dark-mode web dashboard — no coding or terminal commands required!
+
+### Launching the Dashboard:
+- **Easiest (Desktop)**: Double-click **`dashboard.bat`** in the project folder.
+- **CLI / PowerShell**: Run `winmcp dashboard` (or `winmcp gui`) from any terminal.
+- **Browser URL**: Open [http://127.0.0.1:8765/dashboard](http://127.0.0.1:8765/dashboard).
+
+### Dashboard Key Features:
+1. **Live Engine Telemetry**: Real-time status monitoring of core binary PID, gateway listener, Cloudflare tunnel state, and background task health.
+2. **AI Connection Hub**:
+   - **Claude Web (One-Link Connection)**: Copy the unified SSE link (`https://<domain>/sse?token=<key>`) and paste directly into Claude Custom Connectors.
+   - **ChatGPT**: Copy the `/mcp` streamable HTTP endpoint and Bearer token with a single click.
+   - **Claude Desktop**: View and copy ready-to-use `claude_desktop_config.json`.
+3. **Interactive Token Management**:
+   - Reveal or mask active security key.
+   - One-click **"Rotate Token"** generates a new 256-bit cryptographic token and updates `.env` instantly.
+   - Set a custom token via the graphical dialog.
+4. **Cloudflare Tunnel & Domain Switcher**:
+   - Switch between free **Quick Tunnel** (`*.trycloudflare.com`) and permanent **Custom Domain** (`winmcp.yourdomain.com`).
+   - Save domain credentials and automatically refresh the tunnel without terminal commands.
+5. **Interactive 37 Tools Explorer & Live Execution**:
+   - Browse all 37 Windows automation tools with instant search.
+   - Filter by risk level (**Read-Only**, **Low**, **Medium**, **High**, **Critical**).
+   - Click **Run** on any tool to execute it live against the Windows host and inspect results in an interactive response modal.
+6. **Real-Time Audit Log Stream**: Live terminal view of all inbound AI interactions, execution latencies, and security classifications.
+7. **Server Management**: Restart or stop server processes with a single click.
+
+---
+
+## 🔄 3. Background Execution & Persistence Modes
 
 WinMCP supports two execution modes designed for different deployment scenarios:
 
@@ -77,7 +108,7 @@ WinMCP supports two execution modes designed for different deployment scenarios:
 
 ---
 
-## 🌐 3. Cloudflare Tunnel Connectivity (Zero Port Forwarding)
+## 🌐 4. Cloudflare Tunnel Connectivity (Zero Port Forwarding)
 
 WinMCP provides secure, inbound HTTPS connectivity through Cloudflare Edge without opening firewall ports:
 
@@ -102,12 +133,13 @@ For a permanent, fixed URL (e.g., `https://winmcp.yourdomain.com`):
 
 ---
 
-## 🛠️ 4. The `winmcp` Management CLI
+## 🛠️ 5. The `winmcp` Management CLI
 
 Manage your entire server lifecycle from any terminal window anywhere on your system:
 
 | Command | Description |
 | :--- | :--- |
+| `winmcp dashboard` | Open the Interactive Web Control Center Dashboard in your default browser |
 | `winmcp status` | Display the comprehensive status dashboard, active tunnel URL, and running processes |
 | `winmcp start` | Start the Windows MCP Server, Gateway, and Cloudflare Tunnel |
 | `winmcp stop` | Gracefully terminate all WinMCP processes |
@@ -127,7 +159,7 @@ Manage your entire server lifecycle from any terminal window anywhere on your sy
 
 ---
 
-## 🔑 5. Token Management
+## 🔑 6. Token Management
 
 Easily rotate or customize your Bearer authentication token at any time:
 
@@ -146,7 +178,7 @@ All token updates immediately persist to `.env` and automatically restart the ru
 
 ---
 
-## 🗑️ 6. Complete Root Uninstaller
+## 🗑️ 7. Complete Root Uninstaller
 
 If you wish to reset your system or completely remove WinMCP:
 
