@@ -11,10 +11,12 @@ logs/
 __pycache__/
 *.pyc
 test_scratch/
+scratch/
 *.zip
 *.tmp
 *.bak
 *.exe
+*.png
 
 # IDE & Editor Configs
 .vscode/

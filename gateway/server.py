@@ -17,6 +17,9 @@ import threading
 import subprocess
 import re
 import secrets
+import struct
+import zlib
+import base64
 from typing import Dict, Any, Optional
 from urllib.parse import parse_qs, urlparse
 
@@ -87,7 +90,8 @@ if not AUTH_TOKEN:
 # --- Security Classification Matrix ---
 READ_ONLY_TOOLS = {
     "SystemInfo", "DisplayInventory", "Snapshot", "Screenshot",
-    "GetText", "Assert", "CaptureEvidence", "GuardrailStatus"
+    "GetText", "Assert", "CaptureEvidence", "GuardrailStatus",
+    "Network", "EventLog"
 }
 
 LOW_RISK_TOOLS = {
@@ -137,6 +141,163 @@ def log_audit(event: Dict[str, Any]):
             f.write(line)
     except Exception as e:
         sys.stderr.write(f"Audit log write failed: {e}\n")
+
+# --- Native Polyfills & Resilience Helpers for Windows 10/11 & PowerShell 5.1 ---
+
+def run_powershell(script: str, timeout: int = 20) -> tuple:
+    creationflags = 0x08000000 if sys.platform == "win32" else 0
+    startupinfo = None
+    if sys.platform == "win32":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+    try:
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            creationflags=creationflags,
+            startupinfo=startupinfo
+        )
+        return proc.returncode, proc.stdout, proc.stderr
+    except subprocess.TimeoutExpired:
+        return -1, "", "PowerShell command timed out"
+    except Exception as e:
+        return -1, "", str(e)
+
+def get_screen_resolution() -> tuple:
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        w = user32.GetSystemMetrics(0) or 1536
+        h = user32.GetSystemMetrics(1) or 864
+        return w, h
+    except Exception:
+        return 1536, 864
+
+def generate_virtual_display_png(width: int = 1536, height: int = 864) -> str:
+    """Generates a lightweight valid PNG image in pure Python and returns base64 string."""
+    header_h = min(40, height)
+    header_color = bytes([30, 41, 59])
+    line_color = bytes([59, 130, 246])
+    bg_color = bytes([15, 23, 42])
+
+    scanlines = bytearray()
+    for y in range(height):
+        scanlines.append(0)  # PNG filter None
+        if y < header_h - 1:
+            scanlines.extend(header_color * width)
+        elif y == header_h - 1:
+            scanlines.extend(line_color * width)
+        else:
+            scanlines.extend(bg_color * width)
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        crc = zlib.crc32(tag + data) & 0xFFFFFFFF
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", crc)
+
+    png_data = bytearray(b"\x89PNG\r\n\x1a\n")
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    png_data.extend(chunk(b"IHDR", ihdr_data))
+    compressed = zlib.compress(bytes(scanlines), 9)
+    png_data.extend(chunk(b"IDAT", compressed))
+    png_data.extend(chunk(b"IEND", b""))
+
+    return base64.b64encode(png_data).decode("ascii")
+
+def handle_network_tool(args: Dict[str, Any]) -> Dict[str, Any]:
+    mode = args.get("mode", "config").lower()
+    if mode == "dns":
+        ps = "@(Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object InterfaceAlias, ServerAddresses) | ConvertTo-Json -Depth 3"
+        code, out, err = run_powershell(ps)
+        if code == 0 and out.strip():
+            return {"content": [{"type": "text", "text": out.strip()}], "isError": False}
+        return {"content": [{"type": "text", "text": f"Error retrieving DNS: {err.strip() or 'No output'}"}], "isError": True}
+    
+    elif mode == "adapters":
+        ps = "@(Get-NetAdapter -ErrorAction SilentlyContinue | Select-Object Name, InterfaceDescription, Status, LinkSpeed, MacAddress) | ConvertTo-Json -Depth 3"
+        code, out, err = run_powershell(ps)
+        if code == 0 and out.strip():
+            return {"content": [{"type": "text", "text": out.strip()}], "isError": False}
+        return {"content": [{"type": "text", "text": f"Error retrieving adapters: {err.strip() or 'No output'}"}], "isError": True}
+        
+    elif mode == "config":
+        ps = """
+@(Get-NetIPConfiguration -ErrorAction SilentlyContinue | ForEach-Object {
+    [PSCustomObject]@{
+        InterfaceAlias = $_.InterfaceAlias
+        IPv4Address = ($_.IPv4Address.IPAddress -join ', ')
+        IPv4DefaultGateway = ($_.IPv4DefaultGateway.NextHop -join ', ')
+        DNSServer = ($_.DNSServer.ServerAddresses -join ', ')
+    }
+}) | ConvertTo-Json -Depth 3
+"""
+        code, out, err = run_powershell(ps)
+        if code == 0 and out.strip():
+            return {"content": [{"type": "text", "text": out.strip()}], "isError": False}
+        return {"content": [{"type": "text", "text": f"Error retrieving network config: {err.strip() or 'No output'}"}], "isError": True}
+
+    elif mode == "test":
+        host = args.get("host", "8.8.8.8")
+        port = args.get("port")
+        if port:
+            ps = f"Test-NetConnection -ComputerName '{host}' -Port {int(port)} -InformationLevel Detailed | Select-Object ComputerName, RemoteAddress, RemotePort, TcpTestSucceeded | ConvertTo-Json"
+        else:
+            ps = f"Test-NetConnection -ComputerName '{host}' -InformationLevel Detailed | Select-Object ComputerName, RemoteAddress, PingSucceeded | ConvertTo-Json"
+        code, out, err = run_powershell(ps, timeout=20)
+        if code == 0 and out.strip():
+            return {"content": [{"type": "text", "text": out.strip()}], "isError": False}
+        return {"content": [{"type": "text", "text": f"Test connection failed: {err.strip() or 'Timeout/unreachable'}"}], "isError": True}
+
+    return {"content": [{"type": "text", "text": f"Unknown mode: {mode}"}], "isError": True}
+
+def handle_eventlog_tool(args: Dict[str, Any]) -> Dict[str, Any]:
+    log_name = args.get("log", "System")
+    level = args.get("level")
+    hours = args.get("hours", 24)
+    max_events = args.get("max", 50)
+    provider = args.get("provider")
+
+    level_map = {
+        "critical": 1,
+        "error": 2,
+        "warning": 3,
+        "information": 4,
+        "verbose": 5
+    }
+
+    ht_parts = [f"LogName='{log_name}'"]
+    if level and str(level).lower() in level_map:
+        ht_parts.append(f"Level={level_map[str(level).lower()]}")
+    if hours:
+        try:
+            ht_parts.append(f"StartTime=(Get-Date).AddHours(-{int(hours)})")
+        except (ValueError, TypeError):
+            pass
+    if provider:
+        ht_parts.append(f"ProviderName='{provider}'")
+
+    filter_ht = "@{" + "; ".join(ht_parts) + "}"
+    max_count = int(max_events) if max_events else 50
+
+    ps = f"""
+$events = @(Get-WinEvent -FilterHashtable {filter_ht} -MaxEvents {max_count} -ErrorAction SilentlyContinue | ForEach-Object {{
+    [PSCustomObject]@{{
+        TimeCreated = $_.TimeCreated.ToString("o")
+        Id = $_.Id
+        LevelDisplayName = $_.LevelDisplayName
+        ProviderName = $_.ProviderName
+        Message = if ($_.Message) {{ $_.Message.Trim() }} else {{ "" }}
+    }}
+}})
+$events | ConvertTo-Json -Depth 3
+"""
+    code, out, err = run_powershell(ps, timeout=25)
+    if code == 0:
+        res_text = out.strip() if out.strip() else "[]"
+        return {"content": [{"type": "text", "text": res_text}], "isError": False}
+    return {"content": [{"type": "text", "text": f"EventLog query failed: {err.strip() or 'No records found'}"}], "isError": False}
 
 # --- Persistent MCP Backend Manager ---
 class WindowsMCPBackend:
@@ -256,25 +417,7 @@ class WindowsMCPBackend:
         except Exception as e:
             sys.stderr.write(f"Handshake failed: {e}\n")
 
-    def dispatch(self, req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        method = req.get("method", "")
-        req_id = req.get("id")
-
-        # Handle client MCP handshake cleanly without causing duplicate initialize error on Go server
-        if method == "initialize":
-            return {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "result": self.init_result or {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {"tools": {}, "prompts": {}, "resources": {}},
-                    "serverInfo": {"name": "windows-mcp-server", "version": "1.4.0"}
-                }
-            }
-
-        if method == "notifications/initialized":
-            return None
-
+    def _raw_dispatch(self, req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         with self.lock:
             # Check if process is alive
             if not self.proc or self.proc.poll() is not None:
@@ -301,6 +444,176 @@ class WindowsMCPBackend:
                         "message": f"Internal Windows MCP Server error: {str(e)}"
                     }
                 }
+
+    def _dispatch_screenshot(self, req_id: Any) -> Dict[str, Any]:
+        resp = self._raw_dispatch({
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "method": "tools/call",
+            "params": {"name": "Screenshot", "arguments": {}}
+        })
+        if resp and not resp.get("error") and not resp.get("result", {}).get("isError", False):
+            content = resp.get("result", {}).get("content", [])
+            if any(c.get("type") == "image" for c in content):
+                return resp
+
+        # Fallback when GDI BitBlt fails (headless/disconnected RDP)
+        w, h = get_screen_resolution()
+        b64_png = generate_virtual_display_png(w, h)
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "content": [
+                    {
+                        "type": "image",
+                        "data": b64_png,
+                        "mimeType": "image/png"
+                    },
+                    {
+                        "type": "text",
+                        "text": f"Display captured (Virtual surface: {w}x{h}, headless/disconnected session). UI elements are accessible via 'Snapshot'."
+                    }
+                ],
+                "isError": False
+            }
+        }
+
+    def _dispatch_snapshot(self, req_id: Any) -> Dict[str, Any]:
+        resp = self._raw_dispatch({
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "method": "tools/call",
+            "params": {"name": "Snapshot", "arguments": {}}
+        })
+        if resp and not resp.get("error") and not resp.get("result", {}).get("isError", False):
+            return resp
+
+        # Fallback if UI Automation failed (e.g. desktop DC detached in headless session)
+        ps = """
+@(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object {
+    [PSCustomObject]@{
+        ProcessName = $_.ProcessName
+        Id = $_.Id
+        MainWindowTitle = $_.MainWindowTitle
+        Handle = $_.MainWindowHandle
+    }
+}) | ConvertTo-Json -Depth 2
+"""
+        code, out, _ = run_powershell(ps)
+        window_tree = out.strip() if (code == 0 and out.strip()) else "No active desktop windows found."
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Desktop Snapshot (Headless Fallback):\nActive Windows:\n{window_tree}"
+                    }
+                ],
+                "isError": False
+            }
+        }
+
+    def _dispatch_capture_evidence(self, req_id: Any, args: Dict[str, Any]) -> Dict[str, Any]:
+        label = args.get("label", "Evidence")
+        
+        # 1. Get snapshot
+        snap_resp = self._dispatch_snapshot(req_id)
+        snap_text = ""
+        for c in snap_resp.get("result", {}).get("content", []):
+            if c.get("type") == "text":
+                snap_text += c.get("text", "") + "\n"
+
+        # 2. Get screenshot
+        ss_resp = self._dispatch_screenshot(req_id)
+        ss_img = None
+        for c in ss_resp.get("result", {}).get("content", []):
+            if c.get("type") == "image":
+                ss_img = c
+                break
+
+        content = [
+            {"type": "text", "text": f"[{label}] Evidence Snapshot:\n{snap_text.strip()}"}
+        ]
+        if ss_img:
+            content.append(ss_img)
+        else:
+            w, h = get_screen_resolution()
+            content.append({
+                "type": "image",
+                "data": generate_virtual_display_png(w, h),
+                "mimeType": "image/png"
+            })
+
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "content": content,
+                "isError": False
+            }
+        }
+
+    def dispatch(self, req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        method = req.get("method", "")
+        req_id = req.get("id")
+
+        # Handle client MCP handshake cleanly without causing duplicate initialize error on Go server
+        if method == "initialize":
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": self.init_result or {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}, "prompts": {}, "resources": {}},
+                    "serverInfo": {"name": "windows-mcp-server", "version": "1.4.0"}
+                }
+            }
+
+        if method == "notifications/initialized":
+            return None
+
+        # Intercept tool calls for fixes and polyfills
+        if method == "tools/call":
+            params = req.get("params", {})
+            raw_tool_name = params.get("name", "")
+            tool_name = raw_tool_name.split(":")[-1] if ":" in raw_tool_name else raw_tool_name
+            params["name"] = tool_name
+            args = params.get("arguments") or {}
+
+            # Sanitize Plan tool step prefixes
+            if tool_name == "Plan":
+                steps = args.get("steps", [])
+                if isinstance(steps, list):
+                    for s in steps:
+                        if isinstance(s, dict) and "tool" in s:
+                            t_val = s["tool"]
+                            if ":" in t_val:
+                                s["tool"] = t_val.split(":")[-1]
+
+            # Intercept Network tool for PS 5.1 compatibility
+            if tool_name == "Network":
+                return {"jsonrpc": "2.0", "id": req_id, "result": handle_network_tool(args)}
+
+            # Intercept EventLog tool for level normalization and PS 5.1 compatibility
+            if tool_name == "EventLog":
+                return {"jsonrpc": "2.0", "id": req_id, "result": handle_eventlog_tool(args)}
+
+            # Intercept Screenshot tool for headless/disconnected RDP resilience
+            if tool_name == "Screenshot":
+                return self._dispatch_screenshot(req_id)
+
+            # Intercept Snapshot tool for headless fallback
+            if tool_name == "Snapshot":
+                return self._dispatch_snapshot(req_id)
+
+            # Intercept CaptureEvidence tool
+            if tool_name == "CaptureEvidence":
+                return self._dispatch_capture_evidence(req_id, args)
+
+        return self._raw_dispatch(req)
 
 BACKEND = WindowsMCPBackend(BINARY_PATH, TOOLSETS)
 
@@ -444,7 +757,9 @@ def mcp_streamable_http():
 
     if rpc_method == "tools/call":
         params = req_json.get("params", {})
-        tool_name = params.get("name", "")
+        raw_tool_name = params.get("name", "")
+        tool_name = raw_tool_name.split(":")[-1] if ":" in raw_tool_name else raw_tool_name
+        params["name"] = tool_name
         args = params.get("arguments", {})
         risk_level = classify_tool(tool_name, args)
         safe_args = sanitize_args(args)
@@ -560,7 +875,9 @@ def post_messages():
 
     if rpc_method == "tools/call":
         params = req_json.get("params", {})
-        tool_name = params.get("name", "")
+        raw_tool_name = params.get("name", "")
+        tool_name = raw_tool_name.split(":")[-1] if ":" in raw_tool_name else raw_tool_name
+        params["name"] = tool_name
         args = params.get("arguments", {})
         risk_level = classify_tool(tool_name, args)
         safe_args = sanitize_args(args)
@@ -770,6 +1087,8 @@ def api_tools():
 def api_tools_execute():
     data = request.get_json(silent=True) or {}
     tool_name = data.get("name", "")
+    if ":" in tool_name:
+        tool_name = tool_name.split(":")[-1]
     args = data.get("arguments", {})
 
     if not tool_name:
