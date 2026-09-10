@@ -57,9 +57,11 @@ if ($existing) {
 
 # 2. Install Service via NSSM
 Write-Host "Registering service in Windows Services manager..." -ForegroundColor Cyan
-$psExe = (Get-Command "powershell.exe").Source
+$pythonExe = (Get-Command "python.exe" -ErrorAction SilentlyContinue).Source
+if (-not $pythonExe) { $pythonExe = "python.exe" }
+$serviceRunner = "$scriptDir\service_runner.py"
 
-& "$nssmExe" install $serviceName "$psExe" "-NoProfile -ExecutionPolicy Bypass -File `"$runnerScript`""
+& "$nssmExe" install $serviceName "$pythonExe" "`"$serviceRunner`""
 & "$nssmExe" set $serviceName AppDirectory "$scriptDir"
 & "$nssmExe" set $serviceName DisplayName "Windows MCP Server Gateway"
 & "$nssmExe" set $serviceName Description "Windows MCP Server Background Gateway and Cloudflare Tunnel Service"

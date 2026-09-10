@@ -19,26 +19,13 @@ Write-Host "========================================================" -Foregroun
 $taskName = "WindowsMCPServer"
 $runnerScript = "$scriptDir\run_winmcp.ps1"
 
-# 1. Register in Windows Task Scheduler
-Write-Host "[1/2] Registering in Windows Task Scheduler..." -ForegroundColor Cyan
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runnerScript`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 0)
-
-try {
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts Windows MCP Server on user logon" -Force | Out-Null
-    Write-Host " [OK] Scheduled task registered successfully ($taskName)." -ForegroundColor Green
-} catch {
-    Write-Host " [!] Task Scheduler warning: $($_.Exception.Message)" -ForegroundColor Yellow
-}
-
-# 2. Add Silent VBS Launcher to Windows Startup Folder (shell:startup)
-Write-Host "[2/2] Creating silent launcher in Windows Startup Folder..." -ForegroundColor Cyan
+# 1. Create Silent VBS Launcher in Windows Startup Folder (shell:startup)
+Write-Host "[1/2] Creating silent launcher in Windows Startup Folder..." -ForegroundColor Cyan
 $startupFolder = [Environment]::GetFolderPath("Startup")
 $vbsPath = Join-Path $startupFolder "WinMCP_AutoStart.vbs"
 
 $vbsContent = @"
-' WinMCP Silent Background Launcher
+' WinMCP 100% Silent Background Launcher
 Set WshShell = CreateObject("WScript.Shell")
 WshShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$runnerScript""", 0, False
 "@
@@ -48,6 +35,19 @@ try {
     Write-Host " [OK] Silent launcher created at: $vbsPath" -ForegroundColor Green
 } catch {
     Write-Host " [!] Unable to write to Startup folder: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
+# 2. Register in Windows Task Scheduler via wscript (Zero window / flash)
+Write-Host "[2/2] Registering in Windows Task Scheduler..." -ForegroundColor Cyan
+$action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "//nologo `"$vbsPath`""
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 0)
+
+try {
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts Windows MCP Server on user logon" -Force | Out-Null
+    Write-Host " [OK] Scheduled task registered successfully ($taskName)." -ForegroundColor Green
+} catch {
+    Write-Host " [!] Task Scheduler warning: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 Write-Host "`n[OK] WinMCP will now start automatically in the background on system boot and logon!" -ForegroundColor Green

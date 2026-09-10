@@ -54,6 +54,16 @@ def save_env_value(key: str, val: str):
     with open(ENV_PATH, "w", encoding="utf-8") as f:
         f.writelines(lines)
 
+def run_silent(cmd_list):
+    """Executes a command silently in background with zero console window or flash."""
+    creationflags = 0x08000000 if sys.platform == "win32" else 0
+    startupinfo = None
+    if sys.platform == "win32":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+    return subprocess.run(cmd_list, capture_output=True, creationflags=creationflags, startupinfo=startupinfo)
+
 ENV_CONFIG = load_env(ENV_PATH)
 
 HOST = os.environ.get("WINMCP_HOST", ENV_CONFIG.get("WINMCP_HOST", "127.0.0.1"))
@@ -174,6 +184,14 @@ class WindowsMCPBackend:
                 return
             sys.stderr.write(f"Starting windows-mcp-server: {os.path.basename(self.binary_path)} --toolsets {self.toolsets}\n")
             cmd = [self.binary_path, "stdio", "--toolsets", self.toolsets]
+            creationflags = 0
+            startupinfo = None
+            if sys.platform == "win32":
+                creationflags = 0x08000000  # CREATE_NO_WINDOW
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = subprocess.SW_HIDE
+
             self.proc = subprocess.Popen(
                 cmd,
                 stdin=subprocess.PIPE,
@@ -182,7 +200,9 @@ class WindowsMCPBackend:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                bufsize=1
+                bufsize=1,
+                creationflags=creationflags,
+                startupinfo=startupinfo
             )
             # Drain stderr asynchronously to avoid buffer blocking
             t = threading.Thread(target=self._drain_stderr, daemon=True)
@@ -666,10 +686,10 @@ def api_domain_update():
 
     # Restart cloudflared in background thread
     def restart_cf():
-        subprocess.run(["powershell", "-NoProfile", "-Command", "Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue"], capture_output=True)
+        run_silent(["powershell", "-NoProfile", "-Command", "Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue"])
         time.sleep(1)
         start_daemon_py = os.path.join(PROJECT_DIR, "start_daemon.py")
-        subprocess.run([sys.executable, start_daemon_py], capture_output=True)
+        run_silent([sys.executable, start_daemon_py])
     
     threading.Thread(target=restart_cf, daemon=True).start()
     return jsonify({"status": "ok", "mode": mode, "domain": domain})
@@ -679,7 +699,7 @@ def api_server_restart():
     def restart_worker():
         time.sleep(1)
         run_winmcp = os.path.join(PROJECT_DIR, "run_winmcp.ps1")
-        subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", run_winmcp], capture_output=True)
+        run_silent(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", run_winmcp])
     
     threading.Thread(target=restart_worker, daemon=True).start()
     return jsonify({"status": "restarting"})
@@ -689,7 +709,7 @@ def api_server_stop():
     def stop_worker():
         time.sleep(1)
         stop_winmcp = os.path.join(PROJECT_DIR, "stop_winmcp.ps1")
-        subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", stop_winmcp], capture_output=True)
+        run_silent(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", stop_winmcp])
     
     threading.Thread(target=stop_worker, daemon=True).start()
     return jsonify({"status": "stopping"})
@@ -701,13 +721,13 @@ def api_autostart_toggle():
     
     script = "uninstall_autostart.ps1" if is_active else "install_autostart.ps1"
     target = os.path.join(PROJECT_DIR, script)
-    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", target], capture_output=True)
+    run_silent(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", target])
     return jsonify({"status": "ok", "autostart_active": not is_active})
 
 @app.route("/api/service/action", methods=["POST"])
 def api_service_action():
     target = os.path.join(PROJECT_DIR, "install_service.ps1")
-    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", target], capture_output=True)
+    run_silent(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", target])
     return jsonify({"status": "ok"})
 
 @app.route("/api/logs/audit", methods=["GET"])

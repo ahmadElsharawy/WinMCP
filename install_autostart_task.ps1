@@ -5,7 +5,13 @@ $runnerScript = "$scriptDir\run_winmcp.ps1"
 
 Write-Output "Registering Task Scheduler task: $taskName..."
 
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runnerScript`""
+$startupFolder = [Environment]::GetFolderPath("Startup")
+$vbsPath = Join-Path $startupFolder "WinMCP_AutoStart.vbs"
+$action = if (Test-Path $vbsPath) {
+    New-ScheduledTaskAction -Execute "wscript.exe" -Argument "//nologo `"$vbsPath`""
+} else {
+    New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runnerScript`""
+}
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 0)
 

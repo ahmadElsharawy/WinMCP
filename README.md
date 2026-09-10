@@ -52,7 +52,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; .\install.ps1
 Control your entire WinMCP server visually with buttons and mouse from a rich, glassmorphic dark-mode web dashboard — no coding or terminal commands required!
 
 ### Launching the Dashboard:
-- **Easiest (Desktop)**: Double-click **`dashboard.bat`** in the project folder.
+- **Easiest (Desktop - Zero CMD Window)**: Double-click **`dashboard.bat`** or **`dashboard.vbs`** in the project folder.
 - **CLI / PowerShell**: Run `winmcp dashboard` (or `winmcp gui`) from any terminal.
 - **Browser URL**: Open [http://127.0.0.1:8765/dashboard](http://127.0.0.1:8765/dashboard).
 
@@ -96,15 +96,17 @@ WinMCP supports two execution modes designed for different deployment scenarios:
   ```
 
 ### Mode 2: Native Windows Service (via NSSM)
-- **How it works**: Installs WinMCP as a native Windows service named `WinMCP-Service` in the Windows Service Control Manager (`services.msc`).
+- **How it works**: Installs WinMCP as a native Windows service named `WinMCP-Service` in the Windows Service Control Manager (`services.msc`). Runs 100% in the background with zero visible windows or command prompts.
 - **Key Capability**: Boots at system startup before any user logs in. Ideal for headless servers, dedicated virtual machines, or Cloud VPS environments.
 - **Controls**:
-  ```powershell
-  winmcp service install    # Register and start as a 24/7 background Windows Service
-  winmcp service start      # Start the Windows service
-  winmcp service stop       # Stop the Windows service
-  winmcp service uninstall  # Remove the Windows service from system
-  ```
+  - **One-Click**: Double-click **`install_service.bat`** to install and start, or **`uninstall_service.bat`** to remove.
+  - **Via CLI**:
+    ```powershell
+    winmcp service install    # Register and start as a 24/7 background Windows Service
+    winmcp service start      # Start the Windows service
+    winmcp service stop       # Stop the Windows service
+    winmcp service uninstall  # Remove the Windows service from system
+    ```
 
 ---
 
