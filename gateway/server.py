@@ -166,11 +166,13 @@ def run_powershell(script: str, timeout: int = 20) -> tuple:
             ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             creationflags=creationflags,
             startupinfo=startupinfo
         )
-        return proc.returncode, proc.stdout, proc.stderr
+        return proc.returncode, (proc.stdout or ""), (proc.stderr or "")
     except subprocess.TimeoutExpired:
         return -1, "", "PowerShell command timed out"
     except Exception as e:
@@ -540,6 +542,76 @@ Get-ScheduledTask -TaskName '{name}' -ErrorAction SilentlyContinue | Select-Obje
     code, out, err = run_powershell(ps, timeout=20)
     res_text = out.strip() if out.strip() else ("[]" if mode == "list" else err.strip() or "OK")
     return {"content": [{"type": "text", "text": res_text}], "isError": (code != 0 and not out.strip())}
+
+def handle_package_tool(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Autonomous Package Engine: Handles winget bug fixes and seamless Python pip integration."""
+    mode = str(args.get("mode", "")).lower()
+    pkg_id = str(args.get("id", "")).strip()
+    query = str(args.get("query", "")).strip()
+    manager = str(args.get("manager", "")).lower()
+
+    # Detect pip packages
+    is_pip = manager == "pip" or pkg_id.startswith("pip:") or pkg_id.startswith("python:")
+    if pkg_id.startswith("pip:") or pkg_id.startswith("python:"):
+        pkg_id = pkg_id.split(":", 1)[1].strip()
+
+    if mode == "search":
+        search_term = query or pkg_id
+        if not search_term:
+            return {"content": [{"type": "text", "text": "Missing search query."}], "isError": True}
+        # Fixed winget search (without invalid --accept-package-agreements)
+        code, out, err = run_powershell(f"winget search '{search_term}' --accept-source-agreements", timeout=45)
+        out_s, err_s = (out or "").strip(), (err or "").strip()
+        text = out_s if out_s else err_s
+        return {"content": [{"type": "text", "text": text or "No packages found."}], "isError": code != 0}
+
+    elif mode == "install":
+        target = pkg_id or query
+        if not target:
+            return {"content": [{"type": "text", "text": "Missing package id to install."}], "isError": True}
+
+        # If explicitly pip or requested with python: prefix
+        if is_pip:
+            code, out, err = run_powershell(f"python -m pip install {target}", timeout=120)
+            out_s, err_s = (out or "").strip(), (err or "").strip()
+            res_text = out_s if out_s else err_s
+            return {"content": [{"type": "text", "text": f"PIP Install Result for '{target}':\n{res_text}"}], "isError": code != 0}
+
+        # Otherwise try winget first with proper non-interactive flags
+        winget_cmd = f"winget install --id '{target}' --silent --accept-source-agreements --accept-package-agreements --disable-interactivity"
+        code, out, err = run_powershell(winget_cmd, timeout=180)
+        out_s, err_s = (out or "").strip(), (err or "").strip()
+        if code == 0:
+            return {"content": [{"type": "text", "text": f"Successfully installed '{target}' via winget:\n{out_s}"}], "isError": False}
+
+        # If winget failed, auto-fallback to pip in case it's a Python library
+        pip_code, pip_out, pip_err = run_powershell(f"python -m pip install {target}", timeout=120)
+        p_out_s, p_err_s = (pip_out or "").strip(), (pip_err or "").strip()
+        if pip_code == 0:
+            return {"content": [{"type": "text", "text": f"Installed '{target}' via Python pip:\n{p_out_s}"}], "isError": False}
+
+        combined_err = f"Winget error:\n{err_s or out_s}\n\nPip error:\n{p_err_s or p_out_s}"
+        return {"content": [{"type": "text", "text": f"Failed to install '{target}'.\n{combined_err}"}], "isError": True}
+
+    elif mode == "list":
+        filter_term = query or pkg_id
+        cmd = f"winget list {filter_term}" if filter_term else "winget list"
+        code, out, err = run_powershell(cmd, timeout=30)
+        out_s, err_s = (out or "").strip(), (err or "").strip()
+        return {"content": [{"type": "text", "text": out_s or err_s}], "isError": code != 0}
+
+    elif mode == "uninstall":
+        target = pkg_id or query
+        if is_pip:
+            code, out, err = run_powershell(f"python -m pip uninstall -y {target}", timeout=60)
+            out_s, err_s = (out or "").strip(), (err or "").strip()
+            return {"content": [{"type": "text", "text": out_s or err_s}], "isError": code != 0}
+        cmd = f"winget uninstall --id '{target}' --silent"
+        code, out, err = run_powershell(cmd, timeout=120)
+        out_s, err_s = (out or "").strip(), (err or "").strip()
+        return {"content": [{"type": "text", "text": out_s or err_s}], "isError": code != 0}
+
+    return {"content": [{"type": "text", "text": f"Unknown mode: {mode}"}], "isError": True}
 
 def handle_filesystem_tool(args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Handles FileSystem operations across all file formats (Word, Excel, PPTX, PDF, CSV, ZIP, Text, Code)."""
@@ -1098,12 +1170,16 @@ class WindowsMCPBackend:
                 "2. CONTEXT-FIRST DISCOVERY:\n"
                 "   - If the user refers to open files, current folders, or active tasks, or mentions partial document names (e.g. 'محضر اجتماع'): Call `ActiveContext` first. It returns real-time disk paths of open File Explorer folders/tabs, active application windows, foreground tasks, and recently modified files.\n"
                 "   - Before modifying code or files: Use `FileSystem` (mode='read') to view existing content.\n\n"
-                "3. UNIVERSAL FILE ENGINE:\n"
+                "3. AUTONOMOUS DEPENDENCY RESOLUTION & AUTO-INSTALLATION:\n"
+                "   - If you need a library, runtime, or software tool to complete a task (e.g. pandas, openpyxl, python-docx, requests, git, ffmpeg, nodejs):\n"
+                "     INSTALL IT IMMEDIATELY in the background using `Package` (mode='install', id='...') or `PowerShell` (`python -m pip install <pkg>` or `winget install --silent ...`).\n"
+                "   - If a script fails with `ModuleNotFoundError` or a command is missing: NEVER ask the user for permission or report an error. Install the missing package silently in the background, retry, and finish the job!\n\n"
+                "4. UNIVERSAL FILE ENGINE:\n"
                 "   - Word (.docx), Excel (.xlsx), PowerPoint (.pptx), PDF (.pdf), Code, Text, JSON, and ZIP archives:\n"
                 "     Use `FileSystem` to directly read and edit these in the background without needing screen visibility or mouse clicks. For in-place text replacement, supply the `replacements` dictionary.\n\n"
-                "4. AUTONOMOUS SELF-HEALING:\n"
+                "5. AUTONOMOUS SELF-HEALING:\n"
                 "   - If a command fails or returns an error, analyze stderr, adjust your approach, and retry automatically. Solve problems end-to-end without burdening the user.\n\n"
-                "5. DESKTOP & UI AUTOMATION:\n"
+                "6. DESKTOP & UI AUTOMATION:\n"
                 "   - When GUI interaction is required, use `Snapshot` (to inspect elements), `Click`, `Type`, `Shortcut`, or `App` to drive the interface autonomously.\n\n"
                 "Always deliver concise summaries of actions performed, commands executed, and verified results."
             )
@@ -1142,6 +1218,21 @@ class WindowsMCPBackend:
                         }
                     })
                 for t in resp["result"]["tools"]:
+                    if t.get("name") == "Package":
+                        t["description"] = (
+                            "Universal Package & Software Installer: Install, search, and list Windows software, runtimes, "
+                            "and Python packages in the background without user interaction. "
+                            "Supports Windows software via winget (e.g. Python, Git, Node.js, 7zip, ffmpeg) "
+                            "AND Python libraries via pip (e.g. pandas, requests, openpyxl, docx). "
+                            "AUTONOMOUS DIRECTIVE: If any tool or library is needed, install it immediately "
+                            "without asking the user for confirmation."
+                        )
+                        props = t.get("inputSchema", {}).get("properties", {})
+                        props["manager"] = {
+                            "type": "string",
+                            "enum": ["auto", "winget", "pip"],
+                            "description": "Package manager. Defaults to auto (auto-detects pip for Python packages, winget for Windows apps)."
+                        }
                     if t.get("name") == "PowerShell":
                         t["description"] = (
                             "Autonomous Terminal & PowerShell Engine: Run any shell command, Python script, CLI tool, "
@@ -1247,6 +1338,10 @@ class WindowsMCPBackend:
             # Intercept ScheduledTask tool for PS 5.1 compatibility
             if tool_name == "ScheduledTask":
                 return {"jsonrpc": "2.0", "id": req_id, "result": handle_scheduled_task_tool(args)}
+
+            # Intercept Package tool for winget bug fixes and automated Python pip integration
+            if tool_name == "Package":
+                return {"jsonrpc": "2.0", "id": req_id, "result": handle_package_tool(args)}
 
             # Intercept FileSystem tool for rich .docx support and robust path resolution
             if tool_name == "FileSystem":
