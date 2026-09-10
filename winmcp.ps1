@@ -540,6 +540,10 @@ function Set-Domain {
     }
 }
 
+function Uninstall-WinMCP {
+    & "$scriptDir\uninstall.ps1"
+}
+
 function Show-Help {
     Write-Host "`nWinMCP Management CLI Options:" -ForegroundColor Cyan
     Write-Host "  winmcp status              - Show current server status, public URL, and endpoints"
@@ -557,6 +561,7 @@ function Show-Help {
     Write-Host "  winmcp token new           - Generate a new random 256-bit token"
     Write-Host "  winmcp token set <key>     - Set a custom token"
     Write-Host "  winmcp token change        - Interactive token change wizard"
+    Write-Host "  winmcp uninstall           - Completely remove WinMCP from roots (services, tasks, PATH, configs)"
     Write-Host "  winmcp help                - Show this help message`n"
 }
 
@@ -572,6 +577,10 @@ switch ($Command.ToLower()) {
     "autostart" { Manage-AutoStart -Action $SubCommand }
     "logs"      { Show-Logs }
     "token"     { Manage-Token -SubAction $SubCommand -CustomValue $Value }
+    "uninstall" { Uninstall-WinMCP }
+    "wipe"      { Uninstall-WinMCP }
+    "purge"     { Uninstall-WinMCP }
     "help"      { Show-Help }
     default     { Show-Status }
 }
+
