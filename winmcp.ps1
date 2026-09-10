@@ -282,6 +282,34 @@ function Clean-WinMCP {
     Write-Host "`nProject is completely clean and sanitized of any personal or machine-specific data!" -ForegroundColor Cyan
 }
 
+function Test-CloudflareDomain {
+    param([string]$Domain)
+    $clean = $Domain.Replace("https://", "").Replace("http://", "").Trim("/").ToLower()
+    $parts = $clean.Split(".")
+    for ($i = 0; $i -lt ($parts.Length - 1); $i++) {
+        $candidate = ($parts[$i..($parts.Length - 1)]) -join "."
+        try {
+            $res = Invoke-RestMethod -Uri "https://cloudflare-dns.com/dns-query?name=$candidate&type=NS" -Headers @{Accept="application/dns-json"} -TimeoutSec 3 -ErrorAction SilentlyContinue
+            if ($res -and $res.Answer) {
+                foreach ($ans in $res.Answer) {
+                    if ($ans.data -match "cloudflare\.com") {
+                        return @{ IsCloudflare = $true; BaseDomain = $candidate }
+                    }
+                }
+            }
+            $nsRecords = Resolve-DnsName -Name $candidate -Type NS -ErrorAction SilentlyContinue
+            if ($nsRecords) {
+                foreach ($r in $nsRecords) {
+                    if ($r.NameHost -match "cloudflare\.com") {
+                        return @{ IsCloudflare = $true; BaseDomain = $candidate }
+                    }
+                }
+            }
+        } catch {}
+    }
+    return @{ IsCloudflare = $false; BaseDomain = $clean }
+}
+
 function Set-Domain {
     param(
         [string]$DomainName,
@@ -320,12 +348,41 @@ function Set-Domain {
         Write-Host "--------------------------------------------------------" -ForegroundColor DarkGray
         
         $DomainName = Read-Host "أدخل النطاق الخاص بك (مثال: mcp.yourdomain.com)"
+    }
+
+    if (-not $DomainName) {
+        Write-Host "تم الإلغاء. لم يتم إدخال الدومين." -ForegroundColor Yellow
+        return
+    }
+
+    $DomainName = $DomainName.Replace("https://", "").Replace("http://", "").Trim("/")
+
+    # Verify domain on Cloudflare
+    Write-Host "`n[▶] جاري فحص ربط الدومين ($DomainName) مع خوادم Cloudflare..." -ForegroundColor Cyan
+    $cfCheck = Test-CloudflareDomain -Domain $DomainName
+
+    if ($cfCheck.IsCloudflare) {
+        Write-Host " [✔] تم التحقق بنجاح: الدومين ($($cfCheck.BaseDomain)) مربوط ومعتمد على Cloudflare!" -ForegroundColor Green
+    } else {
+        Write-Host "`n[!] تنبيه: الدومين '$DomainName' لا يبدو أنه مربوط بخوادم Cloudflare حالياً!" -ForegroundColor Yellow
+        Write-Host "    (لم يتم العثور على Cloudflare Nameservers مثل: *.ns.cloudflare.com)" -ForegroundColor Gray
+        Write-Host "    لكي يعمل النفق، يجب أن يكون الدومين مضافاً في حسابك على Cloudflare أولاً." -ForegroundColor Gray
+        Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkGray
+        Write-Host " [1] إلغاء العملية والعودة."
+        Write-Host " [2] المتابعة بالرغم من ذلك (إذا قمت بربطه تواً ولم يكتمل انتشار الـ DNS بعد)."
+        
+        $unv = Read-Host "أدخل اختيارك [1 أو 2] (الافتراضي 1)"
+        if ($unv -ne "2") {
+            Write-Host "تم إلغاء ربط الدومين." -ForegroundColor Yellow
+            return
+        }
+    }
+
+    if (-not $TokenValue) {
         $TokenValue = Read-Host "أدخل Cloudflare Tunnel Token (يبدأ بـ eyJh...)"
     }
 
     if ($DomainName -and $TokenValue) {
-        $DomainName = $DomainName.Replace("https://", "").Replace("http://", "").Trim("/")
-        
         # Update .env file
         $content = Get-Content $envFile
         $newContent = @()
@@ -341,7 +398,7 @@ function Set-Domain {
         Write-Host "جاري إعادة تشغيل السيرفر وتفعيل النفق المخصص..." -ForegroundColor Yellow
         Restart-WinMCP
     } else {
-        Write-Host "تم الإلغاء. لم يتم إدخال الدومين أو التوكن." -ForegroundColor Yellow
+        Write-Host "تم الإلغاء. لم يتم إدخال التوكن." -ForegroundColor Yellow
     }
 }
 

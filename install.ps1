@@ -56,6 +56,34 @@ function Print-Warning {
     Write-Host " [!] $Msg" -ForegroundColor Yellow
 }
 
+function Test-CloudflareDomain {
+    param([string]$Domain)
+    $clean = $Domain.Replace("https://", "").Replace("http://", "").Trim("/").ToLower()
+    $parts = $clean.Split(".")
+    for ($i = 0; $i -lt ($parts.Length - 1); $i++) {
+        $candidate = ($parts[$i..($parts.Length - 1)]) -join "."
+        try {
+            $res = Invoke-RestMethod -Uri "https://cloudflare-dns.com/dns-query?name=$candidate&type=NS" -Headers @{Accept="application/dns-json"} -TimeoutSec 3 -ErrorAction SilentlyContinue
+            if ($res -and $res.Answer) {
+                foreach ($ans in $res.Answer) {
+                    if ($ans.data -match "cloudflare\.com") {
+                        return @{ IsCloudflare = $true; BaseDomain = $candidate }
+                    }
+                }
+            }
+            $nsRecords = Resolve-DnsName -Name $candidate -Type NS -ErrorAction SilentlyContinue
+            if ($nsRecords) {
+                foreach ($r in $nsRecords) {
+                    if ($r.NameHost -match "cloudflare\.com") {
+                        return @{ IsCloudflare = $true; BaseDomain = $candidate }
+                    }
+                }
+            }
+        } catch {}
+    }
+    return @{ IsCloudflare = $false; BaseDomain = $clean }
+}
+
 Print-Banner
 
 # --- Step 1: Tunnel Mode Selection ---
@@ -91,21 +119,62 @@ if ($TunnelMode -eq "Custom") {
     Write-Host " 3. اربط الـ Public Hostname مع: Type = HTTP, URL = localhost:8765"
     Write-Host "----------------------------------------------------------------------`n" -ForegroundColor DarkGray
 
-    if (-not $CustomDomain) {
-        $CustomDomain = Read-Host "أدخل الدومين الخاص بك (مثال: mcp.yourdomain.com) [أو اضغط Enter للإلغاء]"
-    }
-    if (-not $TunnelToken -and $CustomDomain) {
-        $TunnelToken = Read-Host "أدخل Cloudflare Tunnel Token (يبدأ بـ eyJh...)"
-    }
-    
-    if (-not $CustomDomain -or -not $TunnelToken) {
-        Write-Host "`n[!] لم يتم إدخال الدومين أو التوكن كاملاً. سيتم المتابعة بالدومين المجاني التلقائي من Cloudflare مؤقتاً." -ForegroundColor Yellow
-        Write-Host "يمكنك ربط دومينك في أي وقت لاحقاً بكتابة الأمر: winmcp domain`n" -ForegroundColor Cyan
-        $TunnelMode = "Quick"
-        $CustomDomain = ""
-        $TunnelToken = ""
-    } else {
+    $domainVerified = $false
+    while (-not $domainVerified) {
+        if (-not $CustomDomain) {
+            $CustomDomain = Read-Host "أدخل الدومين الخاص بك (مثال: mcp.yourdomain.com) [أو اضغط Enter للرجوع للدومين المجاني]"
+        }
+        
+        if (-not $CustomDomain) {
+            Write-Host "`n[!] تم اختيار المتابعة بالدومين المجاني التلقائي من Cloudflare." -ForegroundColor Yellow
+            $TunnelMode = "Quick"
+            $CustomDomain = ""
+            $TunnelToken = ""
+            break
+        }
+
         $CustomDomain = $CustomDomain.Replace("https://", "").Replace("http://", "").Trim("/")
+
+        # Check if domain is connected to Cloudflare
+        Print-Step "جاري فحص ربط الدومين ($CustomDomain) مع خوادم Cloudflare"
+        $cfCheck = Test-CloudflareDomain -Domain $CustomDomain
+        
+        if ($cfCheck.IsCloudflare) {
+            Print-Success "تم التحقق بنجاح: الدومين ($($cfCheck.BaseDomain)) مربوط ومعتمد على Cloudflare!"
+            $domainVerified = $true
+        } else {
+            Write-Host "`n[!] تنبيه: الدومين '$CustomDomain' لا يبدو أنه مربوط بخوادم Cloudflare حالياً!" -ForegroundColor Yellow
+            Write-Host "    (لم يتم العثور على Cloudflare Nameservers مثل: *.ns.cloudflare.com)" -ForegroundColor Gray
+            Write-Host "    لكي يعمل النفق، يجب إضافة الدومين إلى حسابك على Cloudflare أولاً." -ForegroundColor Gray
+            Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
+            Write-Host " [1] إعادة إدخال الدومين مرة أخرى."
+            Write-Host " [2] المتابعة بالدومين المجاني التلقائي من Cloudflare مؤقتاً (Quick Tunnel)."
+            Write-Host " [3] المتابعة بهذا الدومين على أي حال (إذا قمت بربطه تواً وتنتظر انتشار الـ DNS)."
+            
+            $unverifiedChoice = Read-Host "أدخل اختيارك [1 أو 2 أو 3] (الافتراضي 1)"
+            if ($unverifiedChoice -eq "2") {
+                $TunnelMode = "Quick"
+                $CustomDomain = ""
+                $TunnelToken = ""
+                Write-Host "`nتم التحويل إلى الدومين المجاني التلقائي من Cloudflare." -ForegroundColor Green
+                break
+            } elseif ($unverifiedChoice -eq "3") {
+                Write-Host "`nتم اعتماد المتابعة بالدومين بالرغم من عدم اكتمال انتشار الـ DNS." -ForegroundColor Yellow
+                $domainVerified = $true
+            } else {
+                $CustomDomain = "" # Reset to prompt again in loop
+            }
+        }
+    }
+
+    if ($TunnelMode -eq "Custom" -and -not $TunnelToken) {
+        $TunnelToken = Read-Host "أدخل Cloudflare Tunnel Token (يبدأ بـ eyJh...)"
+        if (-not $TunnelToken) {
+            Write-Host "`n[!] لم يتم إدخال التوكن. سيتم المتابعة بالدومين المجاني التلقائي من Cloudflare مؤقتاً." -ForegroundColor Yellow
+            Write-Host "يمكنك ربط دومينك في أي وقت لاحقاً بكتابة الأمر: winmcp domain`n" -ForegroundColor Cyan
+            $TunnelMode = "Quick"
+            $CustomDomain = ""
+        }
     }
 }
 
