@@ -7,7 +7,7 @@
 
 param(
     [Parameter(Position=0)]
-    [string]$Command = "status",
+    [string]$Command = "dashboard",
 
     [Parameter(Position=1)]
     [string]$SubCommand = "",
@@ -586,6 +586,7 @@ switch ($Command.ToLower()) {
     "dashboard" { Open-Dashboard }
     "gui"       { Open-Dashboard }
     "web"       { Open-Dashboard }
+    ""          { Open-Dashboard }
     "status"    { Show-Status }
     "start"     { Start-WinMCP }
     "stop"      { Stop-WinMCP }
@@ -601,6 +602,6 @@ switch ($Command.ToLower()) {
     "wipe"      { Uninstall-WinMCP }
     "purge"     { Uninstall-WinMCP }
     "help"      { Show-Help }
-    default     { Show-Status }
+    default     { Open-Dashboard }
 }
 
