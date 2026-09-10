@@ -319,24 +319,53 @@ def health():
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }), (200 if alive else 503)
 
-@app.route("/mcp", methods=["POST"])
-@app.route("/rpc", methods=["POST"])
+@app.route("/mcp", methods=["GET", "POST"])
+@app.route("/rpc", methods=["GET", "POST"])
 def mcp_streamable_http():
-    """Streamable HTTP / Direct JSON-RPC endpoint (used by ChatGPT and Claude Desktop)."""
+    """Streamable HTTP / Direct JSON-RPC endpoint (used by Claude and ChatGPT)."""
     start_time = time.time()
     client_ip = request.remote_addr
+
+    # If client requests via GET:
+    if request.method == "GET":
+        if "text/event-stream" in request.headers.get("Accept", ""):
+            return sse_handshake()
+        return jsonify({
+            "status": "online",
+            "service": "Windows MCP Remote Gateway",
+            "transport": "streamable-http",
+            "protocolVersion": "2024-11-05",
+            "endpoints": {"mcp": "/mcp", "sse": "/sse"}
+        }), 200
 
     if not check_auth():
         log_audit({
             "client_ip": client_ip,
-            "method": "POST /mcp",
+            "method": f"{request.method} {request.path}",
             "status": "unauthorized",
             "reason": "Invalid or missing token"
         })
-        return jsonify({"error": "Unauthorized: Invalid or missing token"}), 401
+        resp = jsonify({"error": "Unauthorized: Invalid or missing token"})
+        resp.headers["WWW-Authenticate"] = 'Bearer realm="WinMCP"'
+        return resp, 401
+
+    # If client sends an empty POST probe
+    if not request.data or request.content_length == 0:
+        return jsonify({
+            "status": "ok",
+            "service": "Windows MCP Remote Gateway",
+            "transport": "streamable-http",
+            "protocolVersion": "2024-11-05"
+        }), 200
 
     try:
-        req_json = request.get_json(force=True)
+        req_json = request.get_json(force=True, silent=True)
+        if not req_json:
+            return jsonify({
+                "status": "ok",
+                "service": "Windows MCP Remote Gateway",
+                "transport": "streamable-http"
+            }), 200
     except Exception as e:
         return jsonify({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": f"Parse error: {e}"}}), 400
 
@@ -368,7 +397,7 @@ def mcp_streamable_http():
 
     log_audit({
         "client_ip": client_ip,
-        "method": "POST /mcp",
+        "method": f"{request.method} {request.path}",
         "rpc_method": rpc_method,
         "tool_name": tool_name,
         "risk_level": risk_level,
@@ -379,9 +408,12 @@ def mcp_streamable_http():
 
     return jsonify(resp)
 
-@app.route("/sse", methods=["GET"])
+@app.route("/sse", methods=["GET", "POST"])
 def sse_handshake():
     """Server-Sent Events endpoint for MCP SSE clients (Claude Web / claude.ai)."""
+    if request.method == "POST":
+        return mcp_streamable_http()
+
     client_ip = request.remote_addr
     if not check_auth():
         log_audit({
@@ -390,7 +422,9 @@ def sse_handshake():
             "status": "unauthorized",
             "reason": "Invalid or missing token"
         })
-        return jsonify({"error": "Unauthorized: Invalid or missing token"}), 401
+        resp = jsonify({"error": "Unauthorized: Invalid or missing token"})
+        resp.headers["WWW-Authenticate"] = 'Bearer realm="WinMCP"'
+        return resp, 401
 
     session_id = SESSIONS.create_session()
     session_queue = SESSIONS.get_queue(session_id)
