@@ -199,6 +199,18 @@ class WindowsMCPBackend:
             self.proc.stdin.flush()
             resp = self.proc.stdout.readline()
             sys.stderr.write(f"Handshake response: {resp.strip()[:150]}\n")
+            try:
+                parsed = json.loads(resp)
+                if "result" in parsed:
+                    self.init_result = parsed["result"]
+            except Exception:
+                pass
+            if not self.init_result:
+                self.init_result = {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}, "prompts": {}, "resources": {}},
+                    "serverInfo": {"name": "windows-mcp-server", "version": "1.4.0"}
+                }
 
             notif = {"jsonrpc": "2.0", "method": "notifications/initialized"}
             self.proc.stdin.write(json.dumps(notif) + "\n")
@@ -206,7 +218,25 @@ class WindowsMCPBackend:
         except Exception as e:
             sys.stderr.write(f"Handshake failed: {e}\n")
 
-    def dispatch(self, req: Dict[str, Any]) -> Dict[str, Any]:
+    def dispatch(self, req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        method = req.get("method", "")
+        req_id = req.get("id")
+
+        # Handle client MCP handshake cleanly without causing duplicate initialize error on Go server
+        if method == "initialize":
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": self.init_result or {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}, "prompts": {}, "resources": {}},
+                    "serverInfo": {"name": "windows-mcp-server", "version": "1.4.0"}
+                }
+            }
+
+        if method == "notifications/initialized":
+            return None
+
         with self.lock:
             # Check if process is alive
             if not self.proc or self.proc.poll() is not None:
@@ -503,8 +533,9 @@ def post_messages():
     resp = BACKEND.dispatch(req_json)
     duration_ms = round((time.time() - start_time) * 1000, 2)
 
-    # Route response into the SSE stream queue
-    session_queue.put(resp)
+    # Route response into the SSE stream queue if not a notification
+    if resp is not None:
+        session_queue.put(resp)
 
     log_audit({
         "client_ip": client_ip,
