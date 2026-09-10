@@ -63,18 +63,18 @@ if (-not $TunnelMode) {
     if ($NonInteractive) {
         $TunnelMode = "Quick"
     } else {
-        Write-Host "اختر طريقة الوصول عن بُعد (Remote Access Tunnel):" -ForegroundColor White
-        Write-Host "--------------------------------------------------------" -ForegroundColor DarkCyan
-        Write-Host " [1] Quick Tunnel (موصى به - مجاني وفوري بدون دومين أو حساب Cloudflare)" -ForegroundColor Green
-        Write-Host "     - يعمل فوراً خلف أي راوتر أو NAT."
-        Write-Host "     - يعطيك رابط HTTPS مشفر صالح لـ Claude و ChatGPT مباشرة."
+        Write-Host "هل تريد دومين مجاني وتلقائي من Cloudflare أم لديك دومين خاص بك؟" -ForegroundColor White
+        Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
+        Write-Host " [1] أريد دومين مجاني وتلقائي من Cloudflare (جاهز فوراً بدون أي إعدادات)" -ForegroundColor Green
+        Write-Host "     • لا تحتاج حساب على Cloudflare ولا تحتاج لشراء دومين."
+        Write-Host "     • يولد لك رابط HTTPS فوري مشفر ومحمي تلقائياً (*.trycloudflare.com)."
         Write-Host ""
-        Write-Host " [2] Custom Domain Tunnel (نطاق خاص دائم)" -ForegroundColor Magenta
-        Write-Host "     - يتطلب وجود دومين مضاف مسبقاً في حسابك على Cloudflare."
-        Write-Host "     - يتطلب Tunnel Token من لوحة تحكم Cloudflare Zero Trust."
-        Write-Host "--------------------------------------------------------" -ForegroundColor DarkCyan
+        Write-Host " [2] لدي دومين خاص بي وأريد استخدامه (ليكون الرابط ثابتاً ودائماً دائماً)" -ForegroundColor Magenta
+        Write-Host "     • إذا كان لديك دومين مضاف مسبقاً في حسابك على Cloudflare."
+        Write-Host "     • ستحتاج فقط لإدخال الدومين والـ Tunnel Token الخاص بك."
+        Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
         
-        $choice = Read-Host "أدخل اختيارك [1 أو 2] (الافتراضي 1)"
+        $choice = Read-Host "أدخل اختيارك [1 أو 2] (اضغط Enter للاختيار 1 التلقائي المجاني)"
         if ($choice -eq "2") {
             $TunnelMode = "Custom"
         } else {
@@ -84,20 +84,29 @@ if (-not $TunnelMode) {
 }
 
 if ($TunnelMode -eq "Custom") {
-    Write-Host "`n--- إعداد النطاق المخصص (Custom Domain Setup) ---" -ForegroundColor Magenta
-    Write-Host "تعليمات مطلوبة:" -ForegroundColor Yellow
-    Write-Host " 1. ادخل على Cloudflare Zero Trust Dashboard -> Networks -> Tunnels."
-    Write-Host " 2. أنشئ نفق جديد وانسخ الـ Tunnel Token (يبدأ بـ eyJh...)."
-    Write-Host " 3. اربط الـ Public Hostname مع: Service Type = HTTP, URL = localhost:8765"
-    Write-Host "----------------------------------------------------`n" -ForegroundColor DarkGray
+    Write-Host "`n--- ربط الدومين الخاص بك (Custom Domain Setup) ---" -ForegroundColor Magenta
+    Write-Host "تعليمات سريعة من لوحة Cloudflare Zero Trust:" -ForegroundColor Yellow
+    Write-Host " 1. ادخل على: https://one.dash.cloudflare.com -> Networks -> Tunnels"
+    Write-Host " 2. أنشئ نفق جديد (Create Tunnel) وانسخ الـ Tunnel Token (يبدأ بـ eyJh...)."
+    Write-Host " 3. اربط الـ Public Hostname مع: Type = HTTP, URL = localhost:8765"
+    Write-Host "----------------------------------------------------------------------`n" -ForegroundColor DarkGray
 
-    if (-not $TunnelToken) {
-        $TunnelToken = Read-Host "أدخل Cloudflare Tunnel Token"
-    }
     if (-not $CustomDomain) {
-        $CustomDomain = Read-Host "أدخل النطاق المخصص الخاص بك (مثال: mcp.yourdomain.com)"
+        $CustomDomain = Read-Host "أدخل الدومين الخاص بك (مثال: mcp.yourdomain.com) [أو اضغط Enter للإلغاء]"
     }
-    $CustomDomain = $CustomDomain.Replace("https://", "").Replace("http://", "").Trim("/")
+    if (-not $TunnelToken -and $CustomDomain) {
+        $TunnelToken = Read-Host "أدخل Cloudflare Tunnel Token (يبدأ بـ eyJh...)"
+    }
+    
+    if (-not $CustomDomain -or -not $TunnelToken) {
+        Write-Host "`n[!] لم يتم إدخال الدومين أو التوكن كاملاً. سيتم المتابعة بالدومين المجاني التلقائي من Cloudflare مؤقتاً." -ForegroundColor Yellow
+        Write-Host "يمكنك ربط دومينك في أي وقت لاحقاً بكتابة الأمر: winmcp domain`n" -ForegroundColor Cyan
+        $TunnelMode = "Quick"
+        $CustomDomain = ""
+        $TunnelToken = ""
+    } else {
+        $CustomDomain = $CustomDomain.Replace("https://", "").Replace("http://", "").Trim("/")
+    }
 }
 
 # --- Step 2: Directories Initialization ---

@@ -289,15 +289,38 @@ function Set-Domain {
     )
     
     if (-not $DomainName) {
-        Write-Host "`n--- إعداد النطاق المخصص الدائم (Custom Domain Setup) ---" -ForegroundColor Cyan
+        Write-Host "`nهل تريد استخدام دومين مجاني من Cloudflare أم ربط دومين خاص بك؟" -ForegroundColor Cyan
+        Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
+        Write-Host " [1] لدي دومين خاص بي وأريد استخدامه (Custom Domain دائم وثابت للأبد)" -ForegroundColor Magenta
+        Write-Host " [2] أريد دومين مجاني وتلقائي من Cloudflare (Quick Tunnel فوري بدون أي إعدادات)" -ForegroundColor Green
+        Write-Host "----------------------------------------------------------------------" -ForegroundColor DarkCyan
+        
+        $choice = Read-Host "أدخل اختيارك [1 أو 2] (الافتراضي 1)"
+        if ($choice -eq "2") {
+            # Switch to Quick Tunnel
+            $content = Get-Content $envFile
+            $newContent = @()
+            foreach ($line in $content) {
+                if ($line -match "^WINMCP_TUNNEL_MODE=") { $newContent += "WINMCP_TUNNEL_MODE=Quick" }
+                elseif ($line -match "^WINMCP_TUNNEL_TOKEN=") { $newContent += "WINMCP_TUNNEL_TOKEN=" }
+                elseif ($line -match "^WINMCP_CUSTOM_DOMAIN=") { $newContent += "WINMCP_CUSTOM_DOMAIN=" }
+                else { $newContent += $line }
+            }
+            $newContent | Out-File -FilePath $envFile -Encoding utf8 -Force
+            Write-Host "`n[✔] تم التبديل إلى الدومين المجاني التلقائي من Cloudflare!" -ForegroundColor Green
+            Restart-WinMCP
+            return
+        }
+
+        Write-Host "`n--- ربط الدومين المخصص الخاص بك (Custom Domain) ---" -ForegroundColor Cyan
         Write-Host "خطوات Cloudflare المطلوبة:" -ForegroundColor Yellow
-        Write-Host " 1. ادخل على Cloudflare Zero Trust -> Networks -> Tunnels."
+        Write-Host " 1. ادخل على: https://one.dash.cloudflare.com -> Networks -> Tunnels"
         Write-Host " 2. أنشئ نفق جديد وانسخ الـ Tunnel Token (يبدأ بـ eyJh...)."
         Write-Host " 3. اربط الـ Public Hostname: Service Type = HTTP, URL = localhost:8765"
         Write-Host "--------------------------------------------------------" -ForegroundColor DarkGray
         
         $DomainName = Read-Host "أدخل النطاق الخاص بك (مثال: mcp.yourdomain.com)"
-        $TokenValue = Read-Host "أدخل Cloudflare Tunnel Token"
+        $TokenValue = Read-Host "أدخل Cloudflare Tunnel Token (يبدأ بـ eyJh...)"
     }
 
     if ($DomainName -and $TokenValue) {
