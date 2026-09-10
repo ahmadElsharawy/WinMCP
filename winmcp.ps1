@@ -282,12 +282,53 @@ function Clean-WinMCP {
     Write-Host "`nProject is completely clean and sanitized of any personal or machine-specific data!" -ForegroundColor Cyan
 }
 
+function Set-Domain {
+    param(
+        [string]$DomainName,
+        [string]$TokenValue
+    )
+    
+    if (-not $DomainName) {
+        Write-Host "`n--- إعداد النطاق المخصص الدائم (Custom Domain Setup) ---" -ForegroundColor Cyan
+        Write-Host "خطوات Cloudflare المطلوبة:" -ForegroundColor Yellow
+        Write-Host " 1. ادخل على Cloudflare Zero Trust -> Networks -> Tunnels."
+        Write-Host " 2. أنشئ نفق جديد وانسخ الـ Tunnel Token (يبدأ بـ eyJh...)."
+        Write-Host " 3. اربط الـ Public Hostname: Service Type = HTTP, URL = localhost:8765"
+        Write-Host "--------------------------------------------------------" -ForegroundColor DarkGray
+        
+        $DomainName = Read-Host "أدخل النطاق الخاص بك (مثال: mcp.yourdomain.com)"
+        $TokenValue = Read-Host "أدخل Cloudflare Tunnel Token"
+    }
+
+    if ($DomainName -and $TokenValue) {
+        $DomainName = $DomainName.Replace("https://", "").Replace("http://", "").Trim("/")
+        
+        # Update .env file
+        $content = Get-Content $envFile
+        $newContent = @()
+        foreach ($line in $content) {
+            if ($line -match "^WINMCP_TUNNEL_MODE=") { $newContent += "WINMCP_TUNNEL_MODE=Custom" }
+            elseif ($line -match "^WINMCP_TUNNEL_TOKEN=") { $newContent += "WINMCP_TUNNEL_TOKEN=$TokenValue" }
+            elseif ($line -match "^WINMCP_CUSTOM_DOMAIN=") { $newContent += "WINMCP_CUSTOM_DOMAIN=$DomainName" }
+            else { $newContent += $line }
+        }
+        $newContent | Out-File -FilePath $envFile -Encoding utf8 -Force
+        
+        Write-Host "`n[✔] تم حفظ إعدادات النطاق الدائم في .env بنجاح!" -ForegroundColor Green
+        Write-Host "جاري إعادة تشغيل السيرفر وتفعيل النفق المخصص..." -ForegroundColor Yellow
+        Restart-WinMCP
+    } else {
+        Write-Host "تم الإلغاء. لم يتم إدخال الدومين أو التوكن." -ForegroundColor Yellow
+    }
+}
+
 function Show-Help {
     Write-Host "`nWinMCP Management CLI Options:" -ForegroundColor Cyan
     Write-Host "  winmcp status              - Show current server status, public URL, and endpoints"
     Write-Host "  winmcp start               - Launch Windows MCP Server, Gateway and Cloudflare Tunnel"
     Write-Host "  winmcp stop                - Safely stop all WinMCP processes"
     Write-Host "  winmcp restart             - Restart all WinMCP services and refresh tunnel"
+    Write-Host "  winmcp domain              - Configure permanent Custom Domain on Cloudflare"
     Write-Host "  winmcp clean               - Sanitize and remove all logs, caches, and session data"
     Write-Host "  winmcp service install     - Install as 24/7 native Windows Service (NSSM)"
     Write-Host "  winmcp service uninstall   - Remove native Windows Service"
@@ -303,6 +344,8 @@ switch ($Command.ToLower()) {
     "start"     { Start-WinMCP }
     "stop"      { Stop-WinMCP }
     "restart"   { Restart-WinMCP }
+    "domain"    { Set-Domain -DomainName $SubCommand }
+    "tunnel"    { Set-Domain -DomainName $SubCommand }
     "clean"     { Clean-WinMCP }
     "service"   { Manage-Service -Action $SubCommand }
     "autostart" { Manage-AutoStart -Action $SubCommand }

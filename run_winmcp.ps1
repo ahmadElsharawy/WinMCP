@@ -1,4 +1,4 @@
-# WinMCP Unified Background Runner
+﻿# WinMCP Unified Background Runner
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
@@ -30,12 +30,33 @@ if ($ready) {
     Write-Warning "Gateway took longer than expected to initialize. Check logs/gateway.log"
 }
 
+# Load .env configuration
+$envFile = "$scriptDir\.env"
+$tunnelMode = "Quick"
+$tunnelToken = ""
+if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line -match "=") {
+            $parts = $line.Split("=", 2)
+            if ($parts[0].Trim() -eq "WINMCP_TUNNEL_MODE") { $tunnelMode = $parts[1].Trim() }
+            if ($parts[0].Trim() -eq "WINMCP_TUNNEL_TOKEN") { $tunnelToken = $parts[1].Trim() }
+        }
+    }
+}
+
 # 3. Start Cloudflare Tunnel
 $cfExe = "$scriptDir\tunnel\cloudflare\cloudflared.exe"
 if (Test-Path $cfExe) {
-    Write-Output "Starting Cloudflare Tunnel..."
     $tunnelLog = "$logDir\cloudflared.log"
-    $cfProc = Start-Process -FilePath $cfExe -ArgumentList "tunnel --url http://127.0.0.1:8765" -RedirectStandardOutput $tunnelLog -RedirectStandardError "$logDir\cloudflared_error.log" -PassThru -WindowStyle Hidden
+    $tunnelErr = "$logDir\cloudflared_error.log"
+    if ($tunnelMode -eq "Custom" -and $tunnelToken) {
+        Write-Output "Starting Cloudflare Custom Domain Tunnel..."
+        $cfProc = Start-Process -FilePath $cfExe -ArgumentList "tunnel run --token $tunnelToken" -RedirectStandardOutput $tunnelLog -RedirectStandardError $tunnelErr -PassThru -WindowStyle Hidden
+    } else {
+        Write-Output "Starting Cloudflare Quick Tunnel..."
+        $cfProc = Start-Process -FilePath $cfExe -ArgumentList "tunnel --url http://127.0.0.1:8765" -RedirectStandardOutput $tunnelLog -RedirectStandardError $tunnelErr -PassThru -WindowStyle Hidden
+    }
 }
 
 Write-Output "WinMCP started successfully."
