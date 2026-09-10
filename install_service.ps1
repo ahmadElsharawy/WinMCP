@@ -27,6 +27,21 @@ if (-not $isAdmin) {
 Write-Host "`n========================================================" -ForegroundColor Cyan
 Write-Host "    Install WinMCP as Native Windows Service (NSSM)     " -ForegroundColor White
 Write-Host "========================================================" -ForegroundColor Cyan
+Write-Host "`n[!] CRITICAL WARNING FOR DESKTOP AUTOMATION:" -ForegroundColor Yellow
+Write-Host "    Windows Services run in Session 0 (Isolated / Headless)." -ForegroundColor Red
+Write-Host "    In this mode, GUI Desktop Automation, Screenshots, and opening" -ForegroundColor Gray
+Write-Host "    browsers (Chrome) CANNOT interact with your physical desktop screen." -ForegroundColor Gray
+Write-Host "    This mode is intended ONLY for headless VPS/Cloud servers without a GUI." -ForegroundColor Yellow
+Write-Host "`n    For standard desktop control, DO NOT use this service installer!" -ForegroundColor Green
+Write-Host "    Run 'install.bat' instead (which configures interactive auto-start).`n" -ForegroundColor Green
+
+if (-not $Force) {
+    $confirm = Read-Host "Are you sure you want to install Session 0 Headless Service? (y/N)"
+    if ($confirm.Trim().ToLower() -ne "y") {
+        Write-Host "`nInstallation cancelled. Your desktop session remains interactive." -ForegroundColor Green
+        exit 0
+    }
+}
 
 $serviceName = "WinMCP-Service"
 $nssmExe = "$scriptDir\bin\nssm.exe"

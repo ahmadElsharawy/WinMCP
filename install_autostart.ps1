@@ -43,11 +43,18 @@ $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "//nologo `"$
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 0)
 
+$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
+
 try {
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts Windows MCP Server on user logon" -Force | Out-Null
-    Write-Host " [OK] Scheduled task registered successfully ($taskName)." -ForegroundColor Green
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Auto-starts Windows MCP Server on user logon" -Force | Out-Null
+    Write-Host " [OK] Scheduled task registered successfully ($taskName) with Highest Privileges." -ForegroundColor Green
 } catch {
-    Write-Host " [!] Task Scheduler warning: $($_.Exception.Message)" -ForegroundColor Yellow
+    try {
+        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts Windows MCP Server on user logon" -Force | Out-Null
+        Write-Host " [OK] Scheduled task registered successfully ($taskName)." -ForegroundColor Green
+    } catch {
+        Write-Host " [!] Task Scheduler warning: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
 }
 
 Write-Host "`n[OK] WinMCP will now start automatically in the background on system boot and logon!" -ForegroundColor Green

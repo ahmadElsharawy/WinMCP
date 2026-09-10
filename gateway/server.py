@@ -503,6 +503,253 @@ $events | ConvertTo-Json -Depth 3
         return {"content": [{"type": "text", "text": res_text}], "isError": False}
     return {"content": [{"type": "text", "text": f"EventLog query failed: {err.strip() or 'No records found'}"}], "isError": False}
 
+def clean_clixml_noise(text: str) -> str:
+    """Strips PowerShell 5.1 CLIXML progress streams from tool outputs without removing valid output."""
+    if text:
+        text = re.sub(r"<Objs[\s\S]*?</Objs>", "", text)
+        text = re.sub(r"#<\s*CLIXML", "", text)
+        text = text.strip()
+    return text
+
+def handle_scheduled_task_tool(args: Dict[str, Any]) -> Dict[str, Any]:
+    mode = args.get("mode", "list").lower()
+    name = args.get("name", "").strip()
+
+    if mode == "list":
+        filter_clause = f"| Where-Object {{ $_.TaskName -like '*{name}*' }}" if name else ""
+        ps = f"""
+$ProgressPreference = 'SilentlyContinue'
+@(Get-ScheduledTask -ErrorAction SilentlyContinue {filter_clause} | Select-Object -First 100 TaskName, State, TaskPath) | ConvertTo-Json -Depth 2
+"""
+    elif mode == "get":
+        ps = f"""
+$ProgressPreference = 'SilentlyContinue'
+Get-ScheduledTask -TaskName '{name}' -ErrorAction SilentlyContinue | Select-Object TaskName, State, TaskPath, Description | ConvertTo-Json -Depth 2
+"""
+    elif mode == "run":
+        ps = f"$ProgressPreference = 'SilentlyContinue'; Start-ScheduledTask -TaskName '{name}' -ErrorAction SilentlyContinue; 'Task started.'"
+    elif mode == "enable":
+        ps = f"$ProgressPreference = 'SilentlyContinue'; Enable-ScheduledTask -TaskName '{name}' -ErrorAction SilentlyContinue; 'Task enabled.'"
+    elif mode == "disable":
+        ps = f"$ProgressPreference = 'SilentlyContinue'; Disable-ScheduledTask -TaskName '{name}' -ErrorAction SilentlyContinue; 'Task disabled.'"
+    elif mode == "delete":
+        ps = f"$ProgressPreference = 'SilentlyContinue'; Unregister-ScheduledTask -TaskName '{name}' -Confirm:$false -ErrorAction SilentlyContinue; 'Task deleted.'"
+    else:
+        ps = f"$ProgressPreference = 'SilentlyContinue'; @(Get-ScheduledTask -ErrorAction SilentlyContinue | Select-Object -First 50 TaskName, State) | ConvertTo-Json -Depth 2"
+
+    code, out, err = run_powershell(ps, timeout=20)
+    res_text = out.strip() if out.strip() else ("[]" if mode == "list" else err.strip() or "OK")
+    return {"content": [{"type": "text", "text": res_text}], "isError": (code != 0 and not out.strip())}
+
+def handle_filesystem_tool(args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Handles FileSystem operations across all file formats (Word, Excel, PPTX, PDF, CSV, ZIP, Text, Code)."""
+    mode = str(args.get("mode", "")).lower()
+    raw_path = str(args.get("path", "")).strip()
+    if not raw_path and mode not in ("list", "search"):
+        return None
+
+    try:
+        from gateway.file_engine import universal_read_file, universal_replace_file, universal_stat_file, resolve_file_path
+    except ImportError:
+        try:
+            import file_engine
+            universal_read_file = file_engine.universal_read_file
+            universal_replace_file = file_engine.universal_replace_file
+            universal_stat_file = file_engine.universal_stat_file
+            resolve_file_path = file_engine.resolve_file_path
+        except Exception:
+            return None
+
+    if mode == "read":
+        return universal_read_file(raw_path, args)
+
+    elif mode in ("replace", "replace_text") or (mode == "write" and ("replacements" in args or "find_text" in args)):
+        replacements = args.get("replacements") or {}
+        if "find_text" in args and "replace_text" in args:
+            replacements[args["find_text"]] = args["replace_text"]
+        return universal_replace_file(raw_path, replacements, args)
+
+    elif mode == "info":
+        return universal_stat_file(raw_path)
+
+    # For plain text/code writes, handle directly with proper UTF-8
+    if mode == "write" and "content" in args and not ("replacements" in args or "find_text" in args):
+        target_path = resolve_file_path(raw_path)
+        ext = os.path.splitext(target_path)[1].lower()
+        if ext not in (".docx", ".xlsx", ".pptx", ".pdf", ".zip"):
+            try:
+                parent_dir = os.path.dirname(target_path)
+                if parent_dir:
+                    os.makedirs(parent_dir, exist_ok=True)
+                write_mode = "a" if args.get("append", False) else "w"
+                with open(target_path, write_mode, encoding="utf-8") as f:
+                    f.write(args.get("content", ""))
+                return {"content": [{"type": "text", "text": f"Successfully wrote content to: {target_path}"}], "isError": False}
+            except Exception as e:
+                return {"content": [{"type": "text", "text": f"Write error: {str(e)}"}], "isError": True}
+
+    return None
+
+# --- Native Input Desktop Polyfills for Shortcut & Type ---
+
+VK_KEY_MAP = {
+    "ctrl": 0x11, "control": 0x11,
+    "alt": 0x12, "menu": 0x12,
+    "shift": 0x10,
+    "win": 0x5B, "windows": 0x5B,
+    "enter": 0x0D, "return": 0x0D,
+    "esc": 0x1B, "escape": 0x1B,
+    "tab": 0x09,
+    "space": 0x20,
+    "backspace": 0x08,
+    "delete": 0x2E, "del": 0x2E,
+    "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27,
+    "home": 0x24, "end": 0x23,
+    "pageup": 0x21, "pagedown": 0x22,
+    "insert": 0x2D,
+    "f1": 0x70, "f2": 0x71, "f3": 0x72, "f4": 0x73, "f5": 0x74, "f6": 0x75,
+    "f7": 0x76, "f8": 0x77, "f9": 0x78, "f10": 0x79, "f11": 0x7A, "f12": 0x7B
+}
+
+def attach_to_input_desktop():
+    """Ensures thread is attached to interactive desktop before input synthesis."""
+    if sys.platform != "win32":
+        return None
+    try:
+        u = ctypes.windll.user32
+        hdesk = u.OpenInputDesktop(0, False, 0x10000000)
+        if not hdesk:
+            hdesk = u.OpenDesktopW("default", 0, False, 0x10000000)
+        if hdesk:
+            u.SetThreadDesktop(hdesk)
+            return hdesk
+    except Exception:
+        pass
+    return None
+
+def detach_desktop(hdesk):
+    if hdesk and sys.platform == "win32":
+        try:
+            ctypes.windll.user32.CloseDesktop(hdesk)
+        except Exception:
+            pass
+
+def handle_native_shortcut(args: Dict[str, Any]) -> Dict[str, Any]:
+    shortcut_str = args.get("shortcut", "").strip()
+    if not shortcut_str:
+        return {"content": [{"type": "text", "text": "Missing 'shortcut' parameter"}], "isError": True}
+
+    parts = [p.strip().lower() for p in shortcut_str.split("+")]
+    vks = []
+    for p in parts:
+        if p in VK_KEY_MAP:
+            vks.append(VK_KEY_MAP[p])
+        elif len(p) == 1:
+            vks.append(ord(p.upper()))
+        else:
+            return {"content": [{"type": "text", "text": f"Unrecognized key in shortcut: {p}"}], "isError": True}
+
+    hdesk = attach_to_input_desktop()
+    try:
+        u = ctypes.windll.user32
+        ULONG_PTR = ctypes.c_ulonglong
+        class MOUSEINPUT(ctypes.Structure):
+            _fields_ = [('dx', wintypes.LONG), ('dy', wintypes.LONG), ('mouseData', wintypes.DWORD), ('dwFlags', wintypes.DWORD), ('time', wintypes.DWORD), ('dwExtraInfo', ULONG_PTR)]
+        class KEYBDINPUT(ctypes.Structure):
+            _fields_ = [('wVk', wintypes.WORD), ('wScan', wintypes.WORD), ('dwFlags', wintypes.DWORD), ('time', wintypes.DWORD), ('dwExtraInfo', ULONG_PTR)]
+        class HARDWAREINPUT(ctypes.Structure):
+            _fields_ = [('uMsg', wintypes.DWORD), ('wParamL', wintypes.WORD), ('wParamH', wintypes.WORD)]
+        class INPUT(ctypes.Structure):
+            class _INPUT_UNION(ctypes.Union):
+                _fields_ = [('mi', MOUSEINPUT), ('ki', KEYBDINPUT), ('hi', HARDWAREINPUT)]
+            _anonymous_ = ('u',)
+            _fields_ = [('type', wintypes.DWORD), ('u', _INPUT_UNION)]
+
+        # 1. Down inputs in chord order
+        down_inputs = (INPUT * len(vks))()
+        for i, vk in enumerate(vks):
+            down_inputs[i].type = 1
+            down_inputs[i].ki.wVk = vk
+
+        # 2. Up inputs in reverse order
+        up_inputs = (INPUT * len(vks))()
+        for i, vk in enumerate(reversed(vks)):
+            up_inputs[i].type = 1
+            up_inputs[i].ki.wVk = vk
+            up_inputs[i].ki.dwFlags = 2  # KEYEVENTF_KEYUP
+
+        s1 = u.SendInput(len(vks), down_inputs, ctypes.sizeof(INPUT))
+        time.sleep(0.05)
+        s2 = u.SendInput(len(vks), up_inputs, ctypes.sizeof(INPUT))
+
+        if s1 > 0 and s2 > 0:
+            return {"content": [{"type": "text", "text": f"Shortcut '{shortcut_str}' executed successfully."}], "isError": False}
+
+        # Fallback to keybd_event
+        for vk in vks:
+            u.keybd_event(vk, 0, 0, 0)
+        time.sleep(0.05)
+        for vk in reversed(vks):
+            u.keybd_event(vk, 0, 2, 0)
+
+        return {"content": [{"type": "text", "text": f"Shortcut '{shortcut_str}' executed via keybd_event."}], "isError": False}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": f"Native shortcut error: {str(e)}"}], "isError": True}
+    finally:
+        detach_desktop(hdesk)
+
+def handle_native_type(args: Dict[str, Any]) -> Dict[str, Any]:
+    text = args.get("text", "")
+    clear = args.get("clear", False)
+    press_enter = args.get("press_enter", False)
+
+    hdesk = attach_to_input_desktop()
+    try:
+        u = ctypes.windll.user32
+        ULONG_PTR = ctypes.c_ulonglong
+        class MOUSEINPUT(ctypes.Structure):
+            _fields_ = [('dx', wintypes.LONG), ('dy', wintypes.LONG), ('mouseData', wintypes.DWORD), ('dwFlags', wintypes.DWORD), ('time', wintypes.DWORD), ('dwExtraInfo', ULONG_PTR)]
+        class KEYBDINPUT(ctypes.Structure):
+            _fields_ = [('wVk', wintypes.WORD), ('wScan', wintypes.WORD), ('dwFlags', wintypes.DWORD), ('time', wintypes.DWORD), ('dwExtraInfo', ULONG_PTR)]
+        class HARDWAREINPUT(ctypes.Structure):
+            _fields_ = [('uMsg', wintypes.DWORD), ('wParamL', wintypes.WORD), ('wParamH', wintypes.WORD)]
+        class INPUT(ctypes.Structure):
+            class _INPUT_UNION(ctypes.Union):
+                _fields_ = [('mi', MOUSEINPUT), ('ki', KEYBDINPUT), ('hi', HARDWAREINPUT)]
+            _anonymous_ = ('u',)
+            _fields_ = [('type', wintypes.DWORD), ('u', _INPUT_UNION)]
+
+        if clear:
+            handle_native_shortcut({"shortcut": "ctrl+a"})
+            time.sleep(0.05)
+            handle_native_shortcut({"shortcut": "backspace"})
+            time.sleep(0.05)
+
+        if text:
+            inputs = (INPUT * (len(text) * 2))()
+            for i, ch in enumerate(text):
+                inputs[i*2].type = 1
+                inputs[i*2].ki.wVk = 0
+                inputs[i*2].ki.wScan = ord(ch)
+                inputs[i*2].ki.dwFlags = 4  # KEYEVENTF_UNICODE
+
+                inputs[i*2 + 1].type = 1
+                inputs[i*2 + 1].ki.wVk = 0
+                inputs[i*2 + 1].ki.wScan = ord(ch)
+                inputs[i*2 + 1].ki.dwFlags = 4 | 2  # KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
+
+            u.SendInput(len(inputs), inputs, ctypes.sizeof(INPUT))
+
+        if press_enter:
+            time.sleep(0.05)
+            handle_native_shortcut({"shortcut": "enter"})
+
+        return {"content": [{"type": "text", "text": "Text typed successfully."}], "isError": False}
+    except Exception as e:
+        return {"content": [{"type": "text", "text": f"Native typing error: {str(e)}"}], "isError": True}
+    finally:
+        detach_desktop(hdesk)
+
 # --- Persistent MCP Backend Manager ---
 class WindowsMCPBackend:
     def __init__(self, binary_path: str, toolsets: str):
@@ -636,7 +883,14 @@ class WindowsMCPBackend:
                 line = self.proc.stdout.readline()
                 if not line:
                     raise IOError("Empty response from windows-mcp-server")
-                return json.loads(line.strip())
+                parsed = json.loads(line.strip())
+                if isinstance(parsed, dict) and "result" in parsed and isinstance(parsed["result"], dict):
+                    content = parsed["result"].get("content", [])
+                    if isinstance(content, list):
+                        for item in content:
+                            if isinstance(item, dict) and item.get("type") == "text" and "text" in item:
+                                item["text"] = clean_clixml_noise(item["text"])
+                return parsed
             except Exception as e:
                 sys.stderr.write(f"Dispatch error: {e}\n")
                 # Attempt recovery
@@ -803,6 +1057,49 @@ class WindowsMCPBackend:
         if method == "notifications/initialized":
             return None
 
+        # Intercept tools/list to advertise Universal File Engine capabilities
+        if method == "tools/list":
+            resp = self._raw_dispatch(req)
+            if resp and "result" in resp and "tools" in resp["result"]:
+                for t in resp["result"]["tools"]:
+                    if t.get("name") == "FileSystem":
+                        t["description"] = (
+                            "Universal File Engine: Directly read, search, replace, and edit ANY file format on Windows "
+                            "(Word .docx/.dotx, Excel .xlsx/.csv, PowerPoint .pptx, PDF .pdf, ZIP archives, Text, Code, JSON, Markdown). "
+                            "Supports reading structured text and in-place search-and-replace without needing GUI apps or mouse movements. "
+                            "Modes: read, write, replace, copy, move, delete, list, search, info."
+                        )
+                        props = t.get("inputSchema", {}).get("properties", {})
+                        props["replacements"] = {
+                            "type": "object",
+                            "description": "Dictionary of {find_text: replace_text} for in-place text replacement in Word (.docx), Excel (.xlsx), PowerPoint (.pptx), or text/code files."
+                        }
+                        props["sheet"] = {
+                            "type": "string",
+                            "description": "Target sheet name when reading Excel (.xlsx) workbooks."
+                        }
+                        props["start_page"] = {
+                            "type": "integer",
+                            "description": "Starting page number for PDF documents."
+                        }
+                        props["max_pages"] = {
+                            "type": "integer",
+                            "description": "Maximum pages to extract from PDF documents (default 50)."
+                        }
+                        props["start_line"] = {
+                            "type": "integer",
+                            "description": "Starting line number for text/code/log files."
+                        }
+                        props["max_lines"] = {
+                            "type": "integer",
+                            "description": "Maximum lines to extract for text/code/log files (default 1500)."
+                        }
+                        props["inner_path"] = {
+                            "type": "string",
+                            "description": "Relative path of a specific file to extract and read from inside a .zip archive."
+                        }
+            return resp
+
         # Intercept tool calls for fixes and polyfills
         if method == "tools/call":
             params = req.get("params", {})
@@ -840,6 +1137,44 @@ class WindowsMCPBackend:
             # Intercept CaptureEvidence tool
             if tool_name == "CaptureEvidence":
                 return self._dispatch_capture_evidence(req_id, args)
+
+            # Intercept ScheduledTask tool for PS 5.1 compatibility
+            if tool_name == "ScheduledTask":
+                return {"jsonrpc": "2.0", "id": req_id, "result": handle_scheduled_task_tool(args)}
+
+            # Intercept FileSystem tool for rich .docx support and robust path resolution
+            if tool_name == "FileSystem":
+                fs_res = handle_filesystem_tool(args)
+                if fs_res is not None:
+                    return {"jsonrpc": "2.0", "id": req_id, "result": fs_res}
+
+            # Intercept Shortcut tool for resilient SendInput desktop execution
+            if tool_name == "Shortcut":
+                raw_res = self._raw_dispatch(req)
+                is_err = False
+                if not raw_res or "error" in raw_res:
+                    is_err = True
+                elif raw_res.get("result", {}).get("isError", False):
+                    is_err = True
+                if is_err:
+                    native_res = handle_native_shortcut(args)
+                    if not native_res.get("isError"):
+                        return {"jsonrpc": "2.0", "id": req_id, "result": native_res}
+                return raw_res
+
+            # Intercept Type tool for resilient desktop typing
+            if tool_name == "Type":
+                raw_res = self._raw_dispatch(req)
+                is_err = False
+                if not raw_res or "error" in raw_res:
+                    is_err = True
+                elif raw_res.get("result", {}).get("isError", False):
+                    is_err = True
+                if is_err:
+                    native_res = handle_native_type(args)
+                    if not native_res.get("isError"):
+                        return {"jsonrpc": "2.0", "id": req_id, "result": native_res}
+                return raw_res
 
         return self._raw_dispatch(req)
 
@@ -927,6 +1262,16 @@ def health():
         "active_sessions": len(SESSIONS.sessions),
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }), (200 if alive else 503)
+
+@app.route("/api/restart", methods=["POST"])
+def api_restart():
+    if not check_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    def _do_exit():
+        time.sleep(0.5)
+        os._exit(0)
+    threading.Thread(target=_do_exit, daemon=True).start()
+    return jsonify({"status": "restarting", "message": "Gateway exiting for auto-restart."}), 200
 
 @app.route("/mcp", methods=["GET", "POST"])
 @app.route("/rpc", methods=["GET", "POST"])

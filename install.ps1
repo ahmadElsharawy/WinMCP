@@ -197,14 +197,14 @@ Print-Success "Python detected: $($pythonCmd.Source)"
 # Ensure Flask and Requests are installed
 $pkgsInstalled = $false
 try {
-    $out = & python -c "import flask, requests; print('OK')" 2>$null
+    $out = & python -c "import flask, requests, docx, openpyxl, pypdf, pptx, charset_normalizer; print('OK')" 2>$null
     if ($out -match "OK") { $pkgsInstalled = $true }
 } catch {}
 if (-not $pkgsInstalled) {
-    Write-Host "Installing required packages (Flask, Requests)..." -ForegroundColor Yellow
-    & python -m pip install flask requests --quiet
+    Write-Host "Installing required packages (Flask, Requests, python-docx, openpyxl, pypdf, python-pptx, charset-normalizer)..." -ForegroundColor Yellow
+    & python -m pip install flask requests python-docx openpyxl pypdf python-pptx charset-normalizer --quiet
 }
-Print-Success "Required packages (Flask, Requests) are installed."
+Print-Success "Required packages (Flask, Requests, Universal Document Parsers) are installed."
 
 # --- Step 4: Download windows-mcp-server binary ---
 Print-Step "Verifying official engine binary (windows-mcp-server)"
@@ -282,26 +282,24 @@ Print-Success "Settings securely saved to: $envFile"
 
 # --- Step 7: Register Auto-start in Windows Task Scheduler & Startup Folder ---
 Print-Step "Configuring 24/7 background auto-start and reboot survival"
+
+# 0. Clean up conflicting Session 0 service if previously installed
+$svc = Get-Service -Name "WinMCP-Service" -ErrorAction SilentlyContinue
+if ($svc) {
+    Write-Host "Removing legacy Session 0 service to prevent desktop isolation conflicts..." -ForegroundColor Yellow
+    & "$scriptDir\bin\nssm.exe" stop "WinMCP-Service" 2>$null
+    & "$scriptDir\bin\nssm.exe" remove "WinMCP-Service" confirm 2>$null
+    sc.exe delete "WinMCP-Service" 2>$null | Out-Null
+}
+
 $taskName = "WindowsMCPServer"
 $runnerScript = "$scriptDir\run_winmcp.ps1"
 
-# 1. Task Scheduler
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runnerScript`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 0)
-
-try {
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts Windows MCP Server on user logon" -Force -ErrorAction Stop | Out-Null
-    Print-Success "Task registered in Windows Task Scheduler ($taskName)"
-} catch {
-    # Non-elevated user: Task Scheduler requires admin; Startup folder below handles auto-start seamlessly
-}
-
-# 2. Windows Startup Folder (shell:startup)
+# 1. Windows Startup Folder (shell:startup) - 100% Silent VBS Launcher
 $startupFolder = [Environment]::GetFolderPath("Startup")
 $vbsPath = Join-Path $startupFolder "WinMCP_AutoStart.vbs"
 $vbsContent = @"
-' WinMCP Silent Background Launcher
+' WinMCP 100% Silent Background Launcher
 Set WshShell = CreateObject("WScript.Shell")
 WshShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$runnerScript""", 0, False
 "@
@@ -309,6 +307,22 @@ try {
     $vbsContent | Out-File -FilePath $vbsPath -Encoding ascii -Force
     Print-Success "Silent launcher configured in Windows Startup folder."
 } catch {}
+
+# 2. Windows Task Scheduler (Interactive session with Highest Privileges)
+$action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "//nologo `"$vbsPath`""
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 0)
+$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
+
+try {
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Auto-starts Windows MCP Server on user logon" -Force | Out-Null
+    Print-Success "Task registered in Windows Task Scheduler ($taskName) with Highest Privileges"
+} catch {
+    try {
+        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Auto-starts Windows MCP Server on user logon" -Force | Out-Null
+        Print-Success "Task registered in Windows Task Scheduler ($taskName)"
+    } catch {}
+}
 
 # --- Step 8: Add winmcp to User PATH ---
 Print-Step "Adding winmcp command to User PATH environment variable"

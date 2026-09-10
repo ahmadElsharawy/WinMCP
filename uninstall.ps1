@@ -124,7 +124,7 @@ Get-Process -Name "rathole" -ErrorAction SilentlyContinue | ForEach-Object {
 
 # 1.4 Stop python processes running gateway or start_daemon
 try {
-    Get-CimInstance Win32_Process -Filter "Name = 'python.exe' or Name = 'pythonw.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "gateway[\\/]server\.py|start_daemon\.py" } | ForEach-Object {
+    Get-CimInstance Win32_Process -Filter "Name = 'python.exe' or Name = 'pythonw.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "gateway[\\/]server\.py|start_daemon\.py|service_runner\.py" } | ForEach-Object {
         try {
             Write-Output "Terminating WinMCP Gateway Python (PID: $($_.ProcessId))..."
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue

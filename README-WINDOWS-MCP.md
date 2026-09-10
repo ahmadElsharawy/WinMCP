@@ -130,16 +130,16 @@ WinMCP supports two execution modes designed for different deployment scenarios:
   winmcp autostart disable  # Disable automatic start on user logon
   ```
 
-### Mode 2: Native Windows Service (via NSSM)
-- **How it works**: Installs WinMCP as a native Windows service named `WinMCP-Service` in the Windows Service Control Manager (`services.msc`). Runs 100% in the background with zero visible windows or command prompts.
-- **Key Capability**: Boots at system startup before any user logs in. Ideal for headless servers, dedicated virtual machines, or Cloud VPS environments.
+### Mode 2: Native Windows Service (Headless VPS / No GUI Only)
+> [!WARNING]
+> Windows Services run in **Session 0 (Isolated)**. In this mode, **screenshots are blank** and **browsers/apps cannot interact with your physical screen**. Do NOT use this mode if you need desktop automation. Use Mode 1 (`install.bat`) instead.
+
+- **How it works**: Installs WinMCP as a native Windows service named `WinMCP-Service` in `services.msc`.
+- **Key Capability**: Boots at system startup before any user logs in. Strictly for headless Cloud VPS environments without display monitors.
 - **Controls**:
-  - **One-Click**: Double-click **`install_service.bat`** to install and start, or **`uninstall_service.bat`** to remove.
+  - **One-Click**: Double-click **`uninstall_service.bat`** to remove if accidentally installed.
   - **Via CLI**:
     ```powershell
-    winmcp service install    # Register and start as a 24/7 background Windows Service
-    winmcp service start      # Start the Windows service
-    winmcp service stop       # Stop the Windows service
     winmcp service uninstall  # Remove the Windows service from system
     ```
 

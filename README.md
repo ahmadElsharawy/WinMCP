@@ -130,16 +130,16 @@ WinMCP supports two execution modes designed for different deployment scenarios:
   winmcp autostart disable  # Disable automatic start on user logon
   ```
 
-### Mode 2: Native Windows Service (via NSSM)
-- **How it works**: Installs WinMCP as a native Windows service named `WinMCP-Service` in the Windows Service Control Manager (`services.msc`). Runs 100% in the background with zero visible windows or command prompts.
-- **Key Capability**: Boots at system startup before any user logs in. Ideal for headless servers, dedicated virtual machines, or Cloud VPS environments.
+### Mode 2: Native Windows Service (Headless VPS / No GUI Only)
+> [!WARNING]
+> Windows Services run in **Session 0 (Isolated)**. In this mode, **screenshots are blank** and **browsers/apps cannot interact with your physical screen**. Do NOT use this mode if you need desktop automation. Use Mode 1 (`install.bat`) instead.
+
+- **How it works**: Installs WinMCP as a native Windows service named `WinMCP-Service` in `services.msc`.
+- **Key Capability**: Boots at system startup before any user logs in. Strictly for headless Cloud VPS environments without display monitors.
 - **Controls**:
-  - **One-Click**: Double-click **`install_service.bat`** to install and start, or **`uninstall_service.bat`** to remove.
+  - **One-Click**: Double-click **`uninstall_service.bat`** to remove if accidentally installed.
   - **Via CLI**:
     ```powershell
-    winmcp service install    # Register and start as a 24/7 background Windows Service
-    winmcp service start      # Start the Windows service
-    winmcp service stop       # Stop the Windows service
     winmcp service uninstall  # Remove the Windows service from system
     ```
 
@@ -236,6 +236,21 @@ If you wish to reset your system or completely remove WinMCP:
 ### Uninstallation Options:
 - **[1] Reset & Clean (Recommended for fresh testing)**: Cleans all background registrations, services, and tokens while preserving source code so you can run `install.bat` again cleanly.
 - **[2] Full Purge**: Performs all cleaning steps above and deletes the entire WinMCP folder from disk.
+
+---
+
+## 📂 Universal File Engine (Direct Office, PDF, CSV, ZIP & Code Manipulation)
+
+WinMCP includes an integrated **Universal File Engine** that enables remote AI agents (ChatGPT, Claude) to directly read, search, analyze, and edit any file format on your Windows filesystem without opening desktop applications, taking screenshots, or moving the mouse:
+
+| File Format | Supported Capabilities |
+| :--- | :--- |
+| **Word (`.docx`, `.dotx`)** | Directly reads headings, paragraphs, and tables as structured Markdown. Performs in-place text and table replacements while preserving fonts, formatting, and styles. |
+| **Excel (`.xlsx`, `.xlsm`, `.csv`, `.tsv`)** | Parses all sheets into structured Markdown tables with pagination (`max_rows`, `sheet`). In-place cell value and text replacements. |
+| **PDF (`.pdf`)** | Extracts text page-by-page with page range pagination (`start_page`, `max_pages`) without context overflow. |
+| **PowerPoint (`.pptx`)** | Extracts slide titles, body bullet points, tables, and presenter notes. In-place slide text replacement. |
+| **Archives (`.zip`)** | Lists complete archive directory trees and metadata, or reads specific files inside the archive directly (`inner_path`). |
+| **Code & Configs (`.py`, `.json`, `.yaml`, `.sql`, etc.)** | Auto-detects text encodings (UTF-8, Arabic CP1256, UTF-16, ANSI) with pagination (`start_line`, `max_lines`) and in-place search-and-replace. |
 
 ---
 
